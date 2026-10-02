@@ -50,7 +50,7 @@ Available dates [verified]
 GET branches/{branchPublicId}/dates;servicePublicId={servicePublicId};customSlotLength={n}
 ```
 
-The response is a plain JSON list without a wrapper. Each item is an object with a `date` field holding an ISO date (`YYYY-MM-DD`). Fixture: `tests/fixtures/dates.json`. Weekends and some weekdays are missing from the list. The missing weekdays are most likely fully booked or closed days; for example 26.11.2026 is the last Thursday of the month, when Tammsaare is closed. [inferred]
+The response is a plain JSON list without a wrapper. Each item is an object with a `date` field holding an ISO date (`YYYY-MM-DD`). Fixture: `tests/fixtures/dates.json`. Days without free times are missing from the list: on 2 October 2026, 14.10.2026 and 02.12.2026, two weekdays missing from the list, both returned an empty time list. [verified] Some missing days are closures, for example 26.11.2026, the last Thursday of the month.
 
 ```json
 [{"date":"2026-11-19"},{"date":"2026-11-20"},{"date":"2026-11-23"}]
@@ -62,7 +62,7 @@ Free times on a day [verified]
 GET branches/{branchPublicId}/dates/{YYYY-MM-DD}/times;servicePublicId={servicePublicId};customSlotLength={n}
 ```
 
-The path inferred from the Qmatic Calendar Public API was correct. The open-forms Qmatic client uses the same pattern there (`v2/branches/{id}/dates/{day}/times`) with `{"times": [...]}` wrappers, while the web booking layer returns a plain list of objects with `date` and `time` fields. When an office is selected, the UI requests the dates and then, by itself, the times of the first free date. Fixture: `tests/fixtures/times.json`.
+The path inferred from the Qmatic Calendar Public API was correct. The open-forms Qmatic client uses the same pattern there (`v2/branches/{id}/dates/{day}/times`) with `{"times": [...]}` wrappers, while the web booking layer returns a plain list of objects with `date` and `time` fields. When an office is selected, the UI requests the dates and then, by itself, the times of the first free date. Fixture: `tests/fixtures/times.json`. A day without free times returns an empty list `[]` with status 200 (fixture `tests/fixtures/times_empty.json`). The UI shows exactly the times the API returns (S1 in 7.2).
 
 ```json
 [{"date":"2026-11-19","time":"09:15"},{"date":"2026-11-19","time":"10:15"}]
@@ -127,7 +127,7 @@ User-Agent: Mozilla/5.0 (X11; Linux x86_64) ppa-slot-watch/1.0
 ```
 
 - Single requests without cookies and with a User-Agent that names the bot (`ppa-randevu-bot/1.0` and `ppa-slot-watch/1.0`) got status 200 and the same data as the UI. [verified]
-- Responses are `application/json;charset=UTF-8`. [verified]
+- Responses are `application/json;charset=UTF-8` with `Cache-Control: no-store`, so no HTTP cache sits between the bot and the data. [verified]
 - Whether the server blocks by request rate is unknown. The User-Agent can be changed in the settings.
 
 ### 2.5 TLS certificate chain
@@ -273,6 +273,7 @@ Each output line starts with PASS, FAIL, WARN, INFO or SKIP and the assumption I
   - a candidate date that was not a candidate in the last successful check. A date that disappears and comes back is notified again.
   - a time on a date whose times are known in both the previous and the current check, if the time was not in the previous set.
 - New dates and times found in the same cycle go into one message. A date with unknown times is reported without times. If a time filter is set but the times are unknown, the date is still reported.
+- Slots that other people are booking can disappear for up to 10 minutes and come back if the booking is not finished (B2 in 7.2). Reporting them again is intended.
 - Reason for this design: with `(office, date, time)` as the slot key, a date whose times are fetched in one cycle but not in the next (a failed times request, or the date dropping out of the earliest 3) would be reported as new twice.
 - At startup, one message is sent with the earliest date of each office and the current candidates, if any. This first check becomes the initial state.
 - Every day at `DAILY_REPORT_HOUR`, a low-priority status message is sent. It contains the number of checks and errors in the last 24 hours and the earliest date of each office.
@@ -489,13 +490,13 @@ Needs the development machine
 
 Needs a few single requests or the booking UI (any machine, no booking)
 
-- S1. Every time the times endpoint returns can be booked in the UI. On 2 October the UI listed 09:15 to 13:15 while the API returned 09:15 to 15:15; the list may scroll, or the UI may hide later times. Matters because notifications should report only bookable times. Needs a look at the time list in the UI, without selecting a time, or at the UI's JavaScript. The user's own appointment is at 15:15, so late times can be booked through the UI at least on some days; the UI most likely pages the list.
-- S2. Days missing from the dates list have no free times. Matters because times are requested only for listed days. Needs one times request for a missing weekday, for example 02.12.2026; an empty list confirms it and also shows the empty response format.
+- S1. Verified on 2 October 2026: the UI shows exactly the times the times endpoint returns. Checked on four dates, 19.11 (6 times), 27.11 (5), 30.11 (5) and 30.12 (7), each in one row and without paging. Earlier that day the API had returned 7 times for 19.11 while the page showed 5 a few minutes later; the likely cause is that the times changed in between, for example because other people were holding them (B2).
+- S2. Verified on 2 October 2026: days missing from the dates list have no free times. 14.10.2026 (inside the watched period) and 02.12.2026 both returned `[]` with status 200. Fixture: `tests/fixtures/times_empty.json`.
 
 Needs the running bot (seen over days)
 
 - R1. The server tolerates one dates request about every 120 seconds, plus up to 3 times requests while candidates exist, for weeks. Cannot be tested in advance without load. The bot backs off on 429 and 403 and reports them (4.3).
-- R2. A cancelled slot appears in the API within a minute or two. The bot depends on it. So far only the opposite was seen: 09:15 on 19.11 was taken within about an hour. Shown when the first slot is reported.
+- R2. A cancelled slot appears in the API within a minute or two. The bot depends on it. Evidence so far: responses carry `Cache-Control: no-store`, and the free times changed within minutes to hours (09:15 on 19.11 was taken, and the times of 19.11 differed between two reads a few minutes apart). Shown when the first slot is reported.
 - R3. Error responses (403, 429, 5xx, maintenance pages) come in forms the parser and the error handling cope with. Unknown until seen; the bot logs the first 300 characters of unexpected responses (4.7).
 - R4. The IDs and `customSlotLength` stay valid until 27.10. If they change, the API may answer with an error or with an empty list. The startup and daily messages show the earliest date, so an empty list stands out; compare it with the site now and then.
 - R5. ntfy.sh accepts the bot's volume, a few messages a day, and delivers promptly. Check ntfy's documentation on limits; the daily status message shows that delivery keeps working.
