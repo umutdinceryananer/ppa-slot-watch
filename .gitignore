@@ -1,0 +1,14 @@
+# Local settings, holds the real ntfy topic
+settings.py
+
+# Original Turkish brief before the English rewrite, holds the real ntfy topic
+ppa-slot-watch-brief.orig.md
+
+# Logs
+*.log
+*.log.*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
