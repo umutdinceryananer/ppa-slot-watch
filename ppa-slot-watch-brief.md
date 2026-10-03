@@ -21,6 +21,7 @@ User preferences
 - Notification channel is ntfy (ntfy app on the phone).
 - The bot runs continuously on a Huawei MateBook with Linux Mint XFCE.
 - Everything in the project is in English: code, comments, user-facing messages, settings, command line options, file names and documentation.
+- Before the appointment, the school sends documents about the user to the office. A new appointment must leave the school enough working days for that, so days that are too close are not reported (4.2).
 
 Out of scope
 
@@ -264,6 +265,16 @@ Each output line starts with PASS, FAIL, WARN, INFO or SKIP and the assumption I
 
 - In every cycle, the dates endpoint is queried for each office in the settings.
 - A day is a candidate if `today + MIN_DAYS_AHEAD <= day < CURRENT_APPOINTMENT`. Defaults: `CURRENT_APPOINTMENT = "2026-10-27"` and `MIN_DAYS_AHEAD = 1`. Today is the local date of the machine (Europe/Tallinn on the MateBook).
+- School rule. The school sends its documents to the office only after the user emails it the new appointment date (U4 in 7.2). It sends them the same day if the email arrives on a working day (Monday to Friday) before `SCHOOL_EMAIL_DEADLINE`, default `"12:00"`. The bot therefore computes, at the time of each check:
+  - the email day: today, if today is a working day and `now + BOOKING_MINUTES` (default 30, the time to book and write the email) is not later than the deadline; otherwise the next working day;
+  - the sending day: the email day plus `SCHOOL_WORKDAYS` working days (default 0, the same day);
+  - the first reported day: the day after the sending day, and not earlier than `today + MIN_DAYS_AHEAD`.
+  Examples with the defaults: found on Saturday, reported from Tuesday on; found on Friday at 11:00, from Monday on; found on Friday at 11:45, from Tuesday on; found on Monday at 09:00, from Tuesday on. `SCHOOL_EMAIL_DEADLINE = None` turns the rule off. The startup message and `--check-once` print the range of reported days and name free days before the current appointment that are too close.
+- Limits of the school rule:
+  - The rule assumes the email reaches the school by the deadline of the email day. Every new-slot message ends with that moment, for example "Book and email the school the new date before 12:00 today" or "... before 12:00 on Mon 05.10.2026". Missing it makes the reported slot too close.
+  - A slot on the sending day itself is never reported, because "usually the same day" does not guarantee that the documents arrive before the appointment. This may hide a slot the school could still make, but never reports one it cannot.
+  - When the deadline passes, slots of the next day stop being candidates without a message.
+  - Public holidays and closing days of the school are not known to the bot. Before 27.10.2026 there are none; for a later `CURRENT_APPOINTMENT`, raise `SCHOOL_WORKDAYS` around holidays such as 24 to 26 December.
 - With `MIN_DAYS_AHEAD = 0`, today's times are also considered, but only those at least 60 minutes from now.
 - Optional filters: `TIME_WINDOW` (for example `("09:00", "15:00")`, both ends included) and `WEEKDAYS` (0 is Monday, 4 is Friday). Both are off by default.
 - For candidate days, the times endpoint is called for the earliest 3 days per office in each cycle.
@@ -291,7 +302,7 @@ Each output line starts with PASS, FAIL, WARN, INFO or SKIP and the assumption I
 
 - Publishing uses a JSON body: `POST https://ntfy.sh/`, `Content-Type: application/json`, body fields `topic`, `title`, `message`, `priority` and `click`.
 - Publishing with headers is not used. `http.client` encodes header values as latin-1, which fails on characters outside it, for example š and ž in Estonian names or emoji. JSON bodies do not have this problem.
-- Priorities: 5 for a new slot, 4 for errors, 3 for startup and recovery, 2 for the daily status.
+- Priorities: 5 for a new slot and for a startup message that lists earlier slots, 4 for errors, 3 for startup and recovery, 2 for the daily status.
 - `click` is `https://broneering.politsei.ee/`. Tapping the notification opens the site.
 - Anyone who knows the topic name can read the messages. Messages carry no personal data, only office, date and time.
 - The topic is a random, hard-to-guess name. The real topic lives only in `settings.py`, which is in `.gitignore`. `settings.example.py` holds a placeholder, and the bot refuses to start while the placeholder is set. No committed file contains the real topic.
@@ -306,7 +317,10 @@ Body     Tallinn Tammsaare
          Wed 14.10.2026  09:15, 10:15
          Thu 15.10.2026  13:15
          Current appointment 27.10.2026. Tap to book.
+         Book and email the school the new date before 12:00 today.
 ```
+
+The last line appears when the school rule is on (4.2).
 
 ### 4.5 Settings
 
@@ -316,6 +330,9 @@ The only file the user edits is `settings.py`. A Python file was chosen because 
 |---|---|---|
 | `CURRENT_APPOINTMENT` | `"2026-10-27"` | Days before this date are searched |
 | `MIN_DAYS_AHEAD` | `1` | Minimum number of days from today |
+| `SCHOOL_EMAIL_DEADLINE` | `"12:00"` | The school must get the email with the new date before this time on a working day; `None` turns the school rule off (4.2) |
+| `SCHOOL_WORKDAYS` | `0` | Working days the school needs after the email day; 0 means the same day |
+| `BOOKING_MINUTES` | `30` | Minutes from a notification to the email to the school |
 | `OFFICES` | Tammsaare entry | Each item is `{"name": ..., "url": ...}`, the url is the dates address |
 | `CHECK_INTERVAL_SEC` | `120` | Lower limit 60 |
 | `TIME_WINDOW` | `None` | Example `("09:00", "15:00")` |
@@ -350,6 +367,7 @@ OFFICES = [
 python3 slot_watch.py                      continuous watching
 python3 slot_watch.py --check-once         one cycle, prints a summary per office, sends no notification
 python3 slot_watch.py --test-notification  sends a test message to ntfy
+python3 slot_watch.py --settings PATH      reads another settings file (with any of the above)
 ```
 
 The earliest date printed by `--check-once` is compared with the calendar on the site to confirm the IDs.
@@ -437,7 +455,7 @@ ppa-slot-watch/
 
 ## 6. When a notification arrives
 
-1. Tap the notification, the site opens. Select "Applying for or extending a residence permit", the office, the day and the time, and fill in the form. Selecting a time most likely reserves it for 10 minutes without extension (B2 in 7.2), so the form should be completed within that time.
+1. Tap the notification, the site opens. Select "Applying for or extending a residence permit", the office, the day and the time, and fill in the form. Selecting a time most likely reserves it for 10 minutes without extension (B2 in 7.2), so the form should be completed within that time. Right after the booking, tell the school the new date, time and office, so that it sends its documents in time.
 2. Once the new appointment is confirmed, cancel the 27.10 appointment with "Change / cancel appointment", so that the slot opens for someone else. The configuration most likely allows two active appointments (`maxTotal: 2`, B1 in 7.2), so the new one can be booked before the old one is cancelled. If the system still refuses a second appointment, the old one has to be cancelled first, and both slots may be lost in between. If rescheduling works (B3 in 7.2), moving the 27.10 appointment to the new time through the link in the confirmation e-mail avoids both problems.
 3. Update `CURRENT_APPOINTMENT` with the new date, or stop the bot.
 4. The application documents for an earlier day should be ready in advance. TalTech's list: passport, completed application form, family information form, proof of payment of the state fee and a 40x50 mm colour photo. The university sends the admission document to PPA itself.
@@ -482,6 +500,7 @@ Needs the user
 - U1. Verified on 2 October 2026 from the booking confirmation: the current appointment is on 27.10.2026 at 15:15, at the Tammsaare office, for "Applying for or extending a residence permit".
 - U2. The ntfy app on the phone is subscribed to the topic, and its notification settings let a priority 5 message make a sound, also in Do Not Disturb if wanted. Checked together with M11.
 - U3. How the code gets from the Windows machine to the MateBook: a private git remote, a USB stick or a cloud folder. A decision is needed before 3.3. `tools/check_host.py` also works as a single copied file.
+- U4. Verified with the user on 3 October 2026: the school needs the new appointment date and cannot send the documents in advance. It usually sends them the same day if the email arrives before noon on a working day; the exchange is by email, so the reply is not immediate. Still open: "usually" is not a guarantee. If the school is late once, raise `SCHOOL_WORKDAYS` to 1, which hides the slots of the next working day.
 
 Needs the development machine
 
