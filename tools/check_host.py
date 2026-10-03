@@ -404,6 +404,10 @@ def check_m11(topic, server):
     if not topic:
         report("SKIP", "M11", "run with --ntfy-topic to send a test message")
         return
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", topic):
+        report("FAIL", "M11", "not a valid ntfy topic name: use 1 to 64 letters, digits, - or _ "
+               "(replace a placeholder such as <topic> with your own topic)")
+        return
     body = json.dumps({
         "topic": topic,
         "title": "ppa-slot-watch check",
