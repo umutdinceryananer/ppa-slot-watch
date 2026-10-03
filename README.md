@@ -33,8 +33,8 @@ Book and email the school the new date before 12:00 on Mon 05.10.2026.
 
 ## When a notification arrives
 
-1. Move the existing appointment instead of booking a second one. Open your appointment page (the "modify or cancel" link of the confirmation e-mail, best as a home screen shortcut, see below), choose "I want to reschedule my appointment", pick the new date and time and confirm. No form is needed: your name and contact details are already part of the appointment. The site most likely allows only one active appointment per service, so a second booking may be refused. Selecting a time holds it for 10 minutes.
-2. If moving is not offered, book with "Open calendar". Fill in the form with your phone's AutoFill (see below). If the site asks to cancel the existing appointment first, it holds the new time for 10 minutes while you do so.
+1. Move the existing appointment instead of booking a second one. Open your appointment page (the "modify or cancel" link of the confirmation e-mail, best as a home screen shortcut, see below), choose "I want to reschedule my appointment", pick the new date and time and confirm. No form is needed: your name and contact details are already part of the appointment. The site allows only one active appointment, so a second booking is refused while the current one exists. Selecting a time holds it for 10 minutes.
+2. If moving is not offered, book with "Open calendar" and fill in the form with your phone's AutoFill (see below). The site then asks you to cancel the existing appointment first; the new time stays held for 10 minutes while you do so. If that time runs out, both may be lost, which is why moving comes first.
 3. Tap "Email school", check the date and time, and send it before the time in the last line of the notification.
 4. Set `CURRENT_APPOINTMENT` in `settings.py` to the new date and restart the bot (`systemctl --user restart ppa-slot-watch`), or stop it.
 5. Have the documents ready for the earlier day: passport, application form, family information form, proof of payment of the state fee, a 40x50 mm colour photo, proof of income (bank statements; ask the migration advisor about translation) and the student status certificate from your study consultant. The school sends its invitation document to the office itself.
@@ -113,7 +113,7 @@ The full list is in [docs/01-setup.md](docs/01-setup.md).
 
 - The bot never books, and it cannot do anything about slots that others take faster.
 - Only weekends are treated as days off. No Estonian public holiday falls before 27.10.2026; for later dates, raise `SCHOOL_WORKDAYS` around holidays.
-- That rescheduling works and that only one appointment per service is allowed were read from the site's code and configuration, not tried with a real appointment.
+- That rescheduling works was read from the site's code and configuration, not yet tried with a real appointment.
 - The machine has to stay on, online and plugged in; with the lid closed, the XFCE power settings must not suspend it ([docs/03-running.md](docs/03-running.md)).
 
 ## Documentation
