@@ -1,0 +1,16 @@
+[Unit]
+Description=PPA appointment slot watcher
+# Stop restarting after 5 starts within an hour, so that a persistent fatal
+# error does not send a notification every minute.
+StartLimitIntervalSec=1h
+StartLimitBurst=5
+
+[Service]
+WorkingDirectory=%h/ppa-slot-watch
+ExecStart=/usr/bin/systemd-inhibit --what=sleep --who=ppa-slot-watch --why=watching-appointments /usr/bin/python3 %h/ppa-slot-watch/slot_watch.py
+Restart=on-failure
+RestartSec=60
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target
