@@ -33,11 +33,27 @@ Book and email the school the new date before 12:00 on Mon 05.10.2026.
 
 ## When a notification arrives
 
-1. Move the existing appointment instead of booking a second one. Open your appointment page (the "modify or cancel" link of the confirmation e-mail, best as a home screen shortcut, see below), choose "I want to reschedule my appointment", pick the new date and time and confirm. The site most likely allows only one active appointment per service, so a second booking may be refused. Selecting a time holds it for 10 minutes.
-2. If moving is not offered, book with "Open calendar". If the site asks to cancel the existing appointment first, it holds the new time for 10 minutes while you do so.
+1. Move the existing appointment instead of booking a second one. Open your appointment page (the "modify or cancel" link of the confirmation e-mail, best as a home screen shortcut, see below), choose "I want to reschedule my appointment", pick the new date and time and confirm. No form is needed: your name and contact details are already part of the appointment. The site most likely allows only one active appointment per service, so a second booking may be refused. Selecting a time holds it for 10 minutes.
+2. If moving is not offered, book with "Open calendar". Fill in the form with your phone's AutoFill (see below). If the site asks to cancel the existing appointment first, it holds the new time for 10 minutes while you do so.
 3. Tap "Email school", check the date and time, and send it before the time in the last line of the notification.
 4. Set `CURRENT_APPOINTMENT` in `settings.py` to the new date and restart the bot (`systemctl --user restart ppa-slot-watch`), or stop it.
 5. Have the documents ready for the earlier day: passport, application form, family information form, proof of payment of the state fee, a 40x50 mm colour photo, proof of income (bank statements; ask the migration advisor about translation) and the student status certificate from your study consultant. The school sends its invitation document to the office itself.
+
+What is already selected when the booking page opens, and what is not:
+
+- Office and service: selected by the link.
+- Date: the calendar selects the first free day by itself. A slot from the notification is normally the earliest free day, so it is already selected. If an even earlier day is free but too close for the school, for example tomorrow, the calendar selects that one; then tap the day from the notification.
+- Time: not selected. The site has no link parameter for it, and selecting a time holds the slot for 10 minutes, so this one tap stays yours.
+- Personal data: not filled in by the link. The site accepts prefilled data only as an encrypted package made by its own systems, and personal data must not travel through ntfy anyway. Your phone's AutoFill fills the form instead.
+
+## Filling in the booking form faster
+
+Only needed when booking anew; moving an appointment asks for no personal data. Your phone can fill in your name, e-mail and phone number with one tap:
+
+- iPhone: open Settings, Apps, Safari, AutoFill (on older iOS: Settings, Safari, AutoFill). Turn on "Use Contact Info" and choose your own contact card under "My Info". Check that the card in Contacts has your name, e-mail and phone number. In the form, tap the first field and choose the AutoFill suggestion above the keyboard.
+- Android, Chrome: open Chrome, Settings, "Addresses and more", turn on saving and filling addresses and add your name, e-mail and phone number. In the form, tap a field and choose the suggestion.
+
+Fields the phone does not know, for example a personal identification code, still have to be typed.
 
 ## Home screen shortcut to your appointment page
 
