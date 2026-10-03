@@ -61,6 +61,9 @@ Edit `settings.py`. It is a Python file: texts need quotes, and `None`, `True` a
 | `SCHOOL_EMAIL_DEADLINE` | `"12:00"` | The school sends its documents the same day if it gets your email with the new date before this time on a working day; only days after that sending day are reported; `None` turns this off |
 | `SCHOOL_WORKDAYS` | `0` | Working days the school needs after the email day; `0` means the same day |
 | `BOOKING_MINUTES` | `30` | Minutes you need after a notification to book and email the school |
+| `SCHOOL_EMAIL` | `"study@taltech.ee"` | Address of the "Email school" button; `None` removes the button |
+| `SCHOOL_EMAIL_SUBJECT` | see `settings.example.py` | Subject of that e-mail; `{date}`, `{time}`, `{office}` and `{current}` are filled in |
+| `SCHOOL_EMAIL_BODY` | see `settings.example.py` | Text of that e-mail, same placeholders; no name or student number, the text travels through ntfy |
 | `OFFICES` | Tammsaare | Offices to watch, see [02-finding-ids.md](02-finding-ids.md) |
 | `CHECK_INTERVAL_SEC` | `120` | Seconds between checks, at least 60; every wait varies by up to 15% |
 | `TIME_WINDOW` | `None` | For example `("09:00", "15:00")`; both ends included |
