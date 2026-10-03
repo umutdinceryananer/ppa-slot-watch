@@ -87,6 +87,8 @@ The response is wrapped: `{"value": [...]}`. Each office has `id` (the branchPub
 
 Other requests the UI sends on page load: `configuration`, `serviceTemplates`, `customer`, `uiMessages?lang=en_en`, `validateOnLoad` and `appointmentProfiles/`. The bot does not need them. `configuration` holds the booking rules quoted in 2.6. [verified]
 
+UI routes, read from the app script `assets/index-*.js` on 3 October 2026 [verified]: `#/preselect/branch/{branchPublicId}/services/{servicePublicId}` opens the booking page with the office and the service selected, directly at the calendar; it was tried in the browser, and `restrictUrl: false` in the configuration allows it. `#/{appointmentId}` is the page of an existing appointment, the "modify or cancel" link of the confirmation e-mail, and `#/{appointmentId}/reschedule` moves the appointment to a new date and time. The appointment link lets anyone change or cancel the appointment, so the bot never sends it.
+
 Booking and confirmation endpoints were not examined, they are out of scope. Selecting a time in the UI may hold the slot, so the verification stopped at the date step.
 
 ### 2.3 Known IDs
@@ -189,12 +191,12 @@ If the manual file becomes a burden, AIA chasing can be implemented in `tls_chai
 ### 2.6 Booking rules and context
 
 - Values from the `configuration` endpoint [verified]:
-  - `maxTotal: 2`. Together with the UI messages "You have maximum allowed number of appointments. If you want to proceed, you have to delete one or several of your existing appointments." and "Note that you already have an appointment", this most likely means a person can hold two active appointments. It matches the Study in Estonia article. MoveMyTalent's guide suggests that a second appointment under the same name may be blocked. [unverified]
+  - `maxTotal: 2`; `globalRestrictEnabled: true` with `globalRestrictValue: 3`; `branchRestrictEnabled: true` with `branchRestrictValue: 3`; `serviceRestrictEnabled: true` with `serviceRestrictValue: 1`. The UI messages say "You have maximum allowed number of appointments. If you want to proceed, you have to delete one or several of your existing appointments." and "Your appointment has been cancelled, you can now proceed with the current one." The most likely reading is one active appointment per service, so a second residence permit appointment would be refused while the current one exists (B1 in 7.2). Moving the appointment avoids this (B3). The earlier reading of `maxTotal: 2` as two allowed appointments, like the Study in Estonia article, does not fit the per-service limit. MoveMyTalent's guide also suggests that a second appointment under the same name may be blocked. [unverified]
   - `multiplePeopleEnabled: false`, `maxAdults: 1`. One person per booking.
   - `captchaEnabled: true`. The booking flow uses reCAPTCHA, and its badge is visible on the page.
   - `reservationExpiryTimeSeconds: "600"`, `allowReservationExtension: false`, `reservationCountdownPopupDuration: 30`. Selecting a time most likely reserves it for 10 minutes, without extension (B2 in 7.2).
   - `maxReschedules: -1`, `rescheduleFutureDays: -1`, `cancelTimeEnabled: false`. No visible limit on rescheduling and no cancellation deadline, so moving the existing appointment may be possible (B3 in 7.2).
-  - `customerIdentificationEnabled: false`, `validateEmail: false`. No identity check when booking. How `maxTotal` recognises a person is unknown (B1 in 7.2).
+  - `customerIdentificationEnabled: false`, `validateEmail: false`. No identity check when booking, and no e-mail check when rescheduling; the reschedule page shows it only with `validateEmail`. How the limits above recognise a person is unknown (B1 in 7.2).
 - The UI says "You are allowed to book an appointment at one client service office at a time." [verified]
 - Appointments can be booked at most three months ahead (TalTech, PPA student guide). On 2 October 2026 the last listed date for Tammsaare was 30.12.2026, which fits.
 - Snapshot on 2 October 2026 around 13:00 Tallinn time: the earliest free date for the residence permit service at Tammsaare was 19.11.2026, with hourly times from 09:15 to 15:15, and 25 free dates up to 30.12.2026. Nothing before 27.10.2026, so the bot waits for cancellations. [verified]
@@ -303,8 +305,9 @@ Each output line starts with PASS, FAIL, WARN, INFO or SKIP and the assumption I
 - Publishing uses a JSON body: `POST https://ntfy.sh/`, `Content-Type: application/json`, body fields `topic`, `title`, `message`, `priority` and `click`.
 - Publishing with headers is not used. `http.client` encodes header values as latin-1, which fails on characters outside it, for example š and ž in Estonian names or emoji. JSON bodies do not have this problem.
 - Priorities: 5 for a new slot and for a startup message that lists earlier slots, 4 for errors, 3 for startup and recovery, 2 for the daily status.
-- `click` is `https://broneering.politsei.ee/`. Tapping the notification opens the site.
-- Anyone who knows the topic name can read the messages. Messages carry no personal data, only office, date and time.
+- Tapping a new-slot notification, or a startup message that lists slots, opens the booking page of the office with the earliest slot, at the calendar, with the office and the service selected (2.2). Other messages open `https://broneering.politsei.ee/`.
+- New-slot messages carry two buttons (ntfy view actions; the ntfy documentation lists them as supported on Android, iOS and the web; on iOS they show when the notification is pressed and held): "Open calendar", the same address, and "Email school", a `mailto:` link to `SCHOOL_EMAIL` with the subject and text of `SCHOOL_EMAIL_SUBJECT` and `SCHOOL_EMAIL_BODY`, filled in with the date and the earliest time of the slot, the office and the current appointment. Without `SCHOOL_EMAIL` only the first button is sent.
+- Anyone who knows the topic name can read the messages. They carry no personal data: office, date and time, and the school's address and e-mail text, which must not contain the user's name or student number. The link of the user's own appointment page is never sent, because it allows cancelling the appointment.
 - The topic is a random, hard-to-guess name. The real topic lives only in `settings.py`, which is in `.gitignore`. `settings.example.py` holds a placeholder, and the bot refuses to start while the placeholder is set. No committed file contains the real topic.
 - The ntfy app is installed on the phone and subscribed to the topic.
 - As an extra alert on the desktop, `notify-send` and `paplay` are used when present, otherwise they are skipped silently.
@@ -318,9 +321,10 @@ Body     Tallinn Tammsaare
          Thu 15.10.2026  13:15
          Current appointment 27.10.2026. Tap to book.
          Book and email the school the new date before 12:00 today.
+Buttons  Open calendar, Email school
 ```
 
-The last line appears when the school rule is on (4.2).
+The reminder line appears when the school rule is on (4.2), the "Email school" button when `SCHOOL_EMAIL` is set.
 
 ### 4.5 Settings
 
@@ -344,6 +348,9 @@ The only file the user edits is `settings.py`. A Python file was chosen because 
 | `DESKTOP_ALERTS` | `True` | notify-send and sound |
 | `USER_AGENT` | value naming the bot | See 2.4 |
 | `EXTRA_CA_FILE` | `"certs/gogetssl-rsa-dv-ca.pem"` | Intermediate missing from the server chain, see 2.5. `None` turns it off |
+| `SCHOOL_EMAIL` | `"study@taltech.ee"` | Address of the "Email school" button; `None` removes it |
+| `SCHOOL_EMAIL_SUBJECT` | `"Earlier PPA appointment: {date} {time}"` | Subject of that e-mail |
+| `SCHOOL_EMAIL_BODY` | see `settings.example.py` | Text of that e-mail; placeholders `{date}`, `{time}`, `{office}`, `{current}` |
 
 Offices are stored as URLs. The bot reads `branchPublicId`, `servicePublicId` and `customSlotLength` from the URL. The times address is built by replacing `/dates;` with `/dates/{YYYY-MM-DD}/times;`. The default entry:
 
@@ -455,10 +462,11 @@ ppa-slot-watch/
 
 ## 6. When a notification arrives
 
-1. Tap the notification, the site opens. Select "Applying for or extending a residence permit", the office, the day and the time, and fill in the form. Selecting a time most likely reserves it for 10 minutes without extension (B2 in 7.2), so the form should be completed within that time. Right after the booking, tell the school the new date, time and office, so that it sends its documents in time.
-2. Once the new appointment is confirmed, cancel the 27.10 appointment with "Change / cancel appointment", so that the slot opens for someone else. The configuration most likely allows two active appointments (`maxTotal: 2`, B1 in 7.2), so the new one can be booked before the old one is cancelled. If the system still refuses a second appointment, the old one has to be cancelled first, and both slots may be lost in between. If rescheduling works (B3 in 7.2), moving the 27.10 appointment to the new time through the link in the confirmation e-mail avoids both problems.
-3. Update `CURRENT_APPOINTMENT` with the new date, or stop the bot.
-4. The application documents for an earlier day should be ready in advance. TalTech's list: passport, completed application form, family information form, proof of payment of the state fee and a 40x50 mm colour photo. The university sends the admission document to PPA itself.
+1. Move the existing appointment instead of booking a second one. Open the appointment page (the "modify or cancel" link of the confirmation e-mail, kept as a home screen shortcut on the phone and never in the repository), choose "I want to reschedule my appointment", select the new date and time and confirm (B3 in 7.2). A second residence permit appointment would most likely be refused (B1). Selecting a time holds it for 10 minutes without extension (B2).
+2. If moving is not offered, book through the notification ("Open calendar") and cancel the 27.10 appointment, so that the slot opens for someone else. If the site asks to cancel the old appointment first, the new time stays held for 10 minutes; if that time runs out, both may be lost.
+3. Right after that, send the e-mail to the school with the "Email school" button, before the moment named in the last line of the notification. Check the time in the e-mail; it names the earliest time of the day. The school confirmed that such an e-mail is enough for it to send its invitation document to the office (U4).
+4. Update `CURRENT_APPOINTMENT` with the new date and restart the bot, or stop it.
+5. The documents for an earlier day should be ready in advance: passport, completed application form, family information form, proof of payment of the state fee and a 40x50 mm colour photo (TalTech's list), proof of income (bank statements; the migration advisor confirms whether a translation is needed) and the student status certificate issued by the study consultant.
 
 ## 7. Open questions and unverified assumptions
 
@@ -471,8 +479,8 @@ Status on 2 October 2026. A checked box means the question was answered from the
 - [x] Which office is the reference project's Tallinn ID, and what is the ID of the second Tallinn office? Tammsaare. No other Tallinn office offers the residence permit service (2.3).
 - [x] What are the path and response format of the times endpoint? As inferred, a list of objects with `date` and `time` (2.2).
 - [x] Which endpoints return the service and office lists? `serviceGroups` and `branches/available;servicePublicId=...` (2.2).
-- [ ] Is there a TLS chain error on the MateBook? Expected, yes. The server does not send the intermediate, and OpenSSL-based clients failed in the simulation (2.5). The project ships the intermediate. Confirmation with `tools/check_host.py` (M4, M5 in 7.2) and `--check-once` on the MateBook.
-- [x] Does the two-appointments-per-person rule apply in the new system? Most likely yes, `maxTotal: 2` (2.6).
+- [x] Is there a TLS chain error on the MateBook? Yes, verified on 3 October 2026: without the intermediate the handshake fails, with `certs/gogetssl-rsa-dv-ca.pem` it succeeds, and `--check-once` read the live site (M4 to M6 in 7.2).
+- [x] Does the two-appointments-per-person rule apply in the new system? Most likely not for the same service: `serviceRestrictValue: 1` (2.6). Moving the appointment avoids the question (6).
 - [ ] Does the server block by User-Agent or request rate? Single requests with the bot's User-Agent and no cookies were answered normally. Rate-based blocking is unknown (R1 in 7.2).
 
 ### 7.2 Unverified assumptions
@@ -481,31 +489,31 @@ Everything in this document that has not been checked yet, grouped by what is ne
 
 Needs the MateBook (`tools/check_host.py`, see 3.3)
 
-- M1. Linux Mint 21 with Python 3.10 or Mint 22 with Python 3.12, and `python3` is `/usr/bin/python3`. Matters for the test targets and the path in the systemd unit.
-- M2. The standard library modules the bot and its tests use can be imported. Debian-based systems ship some modules in separate packages.
-- M3. Python's OpenSSL version and default verify flags. Information for 2.5; the bot clears `VERIFY_X509_PARTIAL_CHAIN` either way.
-- M4. Without the intermediate, TLS verification fails on the MateBook, so the problem in 2.5 exists there.
-- M5. With `certs/gogetssl-rsa-dv-ca.pem`, verification succeeds and ends at a root from Mint's CA store. This is the core of the TLS solution.
-- M6. A dates request from the MateBook with the bot's headers gets status 200 and the same earliest date as the site.
-- M7. The time zone is Europe/Tallinn and the clock is synchronised, so "today" and the 60-minute rule in 4.2 are right.
-- M8. The systemd user manager runs and a sleep inhibitor can be taken without a password (4.8).
-- M9. Lid and idle settings (logind, XFCE Power Manager) do not suspend the machine while the bot runs. The script prints the settings; only a long run proves it (M13).
-- M10. `notify-send` and `paplay` exist and work, also from a user service. Needs `--desktop-test` and the user's report of what was seen and heard.
-- M11. ntfy.sh is reachable from the MateBook and a JSON message, including non-ASCII text, reaches the phone. Needs `--ntfy-topic` and the user's confirmation (U2).
-- M12. Linger state and git availability. Information for 4.8 and U3.
-- M13. The machine stays awake and online for days. Only a long run shows it, through the daily status message and the gaps between log lines.
+- M1. Verified on 3 October 2026: Linux Mint 22.3, Python 3.12.3 at `/usr/bin/python3`.
+- M2. Verified on 3 October 2026: all needed standard library modules import.
+- M3. Verified on 3 October 2026: OpenSSL 3.0.13; `create_default_context()` sets neither `VERIFY_X509_PARTIAL_CHAIN` nor `VERIFY_X509_STRICT`.
+- M4. Verified on 3 October 2026: without the intermediate the handshake fails with `unable to get local issuer certificate` (code 20).
+- M5. Verified on 3 October 2026: with `certs/gogetssl-rsa-dv-ca.pem` the handshake succeeds (TLS 1.3) and ends at a root of the system CA store.
+- M6. Verified on 3 October 2026: status 200, 25 dates, earliest 19.11.2026, as on the site; `--check-once` printed the same.
+- M7. Verified on 3 October 2026: Europe/Tallinn, synchronised by NTP, 1 second from the server's clock.
+- M8. Verified on 3 October 2026: the user manager runs; `systemctl`, `systemd-inhibit`, `systemd-run` and `loginctl` exist; a sleep inhibitor can be taken without a password. The service was installed and sent its startup message.
+- M9. Partly verified on 3 October 2026: XFCE Power Manager handles the lid itself (it holds the `handle-lid-switch` inhibitor; `logind-handle-lid-switch false`), and the lid action is "Switch off display" on battery and plugged in (`lid-action-on-ac 0`, `lid-action-on-battery 0`). No inactivity setting is stored, so the defaults apply. The long run (M13) still has to confirm it.
+- M10. Verified on 3 October 2026: two desktop notifications and two sounds, from the terminal and from a user service.
+- M11. Verified on 3 October 2026: `--test-notification` from the MateBook reached the phone, with "Jõhvi, Pärnu" shown correctly. A first try with the placeholder `<konu>` as topic got HTTP 400 from ntfy; the host check now rejects invalid topic names before sending.
+- M12. Verified on 3 October 2026: linger is off, git is installed, 6.7 GiB of memory. Linger is not needed while the desktop session stays open.
+- M13. Still open: the service runs since 3 October 2026. A test with the lid closed for about 10 minutes, then the daily status messages, show whether the machine stays awake and online.
 
 Needs the user
 
 - U1. Verified on 2 October 2026 from the booking confirmation: the current appointment is on 27.10.2026 at 15:15, at the Tammsaare office, for "Applying for or extending a residence permit".
-- U2. The ntfy app on the phone is subscribed to the topic, and its notification settings let a priority 5 message make a sound, also in Do Not Disturb if wanted. Checked together with M11.
-- U3. How the code gets from the Windows machine to the MateBook: a private git remote, a USB stick or a cloud folder. A decision is needed before 3.3. `tools/check_host.py` also works as a single copied file.
-- U4. Verified with the user on 3 October 2026: the school needs the new appointment date and cannot send the documents in advance. It usually sends them the same day if the email arrives before noon on a working day; the exchange is by email, so the reply is not immediate. Still open: "usually" is not a guarantee. If the school is late once, raise `SCHOOL_WORKDAYS` to 1, which hides the slots of the next working day.
+- U2. Verified on 3 October 2026: the ntfy app is installed on the phone and subscribed to the topic, and the test message arrived. Not checked: whether priority 5 messages come through in Do Not Disturb mode.
+- U3. Decided on 3 October 2026: the private GitHub repository; the MateBook clones it with `gh`.
+- U4. Verified with the user on 3 October 2026: the school (study@taltech.ee) sends its invitation document to the office electronically before the appointment, and an e-mail from the user with the appointment date is sufficient confirmation; it cannot send it before the date is known. It usually sends it the same day if the e-mail arrives before noon on a working day; the exchange is by e-mail, so the reply is not immediate. Still open: "usually" is not a guarantee. If the school is late once, raise `SCHOOL_WORKDAYS` to 1, which hides the slots of the next working day.
 
 Needs the development machine
 
 - D1. Decided on 2 October 2026: Python 3.10 and 3.12 are not installed on the development machine. The tests run there with Python 3.14 during development and once on the MateBook with its own Python before the bot goes live (5). The bot runs only on the MateBook, so its Python version is the one that matters.
-- D2. The code and tests behave the same on Windows and Linux. Checked by running the tests on both.
+- D2. Verified on 3 October 2026: the tests of that day (61) passed on Windows with Python 3.14 and on the MateBook with Python 3.12.3.
 
 Needs a few single requests or the booking UI (any machine, no booking)
 
@@ -522,9 +530,9 @@ Needs the running bot (seen over days)
 
 Shown only when booking
 
-- B1. `maxTotal: 2` means two active appointments per person, so the new appointment can be booked before the old one is cancelled (6). Which fields identify a person is unknown; identity checks are off (`customerIdentificationEnabled: false`, `validateEmail: false`). The confirmation e-mail says that the appointment can only be used by the person in whose name it was made.
+- B1. Most likely only one active appointment per service (`serviceRestrictEnabled: true`, `serviceRestrictValue: 1`, see 2.6), so a second residence permit appointment would be refused while the current one exists; `maxTotal: 2` alone had suggested two. Which fields identify a person is unknown; identity checks are off. The confirmation e-mail says that the appointment can only be used by the person in whose name it was made. Moving the appointment (B3) avoids the question.
 - B2. Selecting a time reserves it for 10 minutes without extension (`reservationExpiryTimeSeconds: "600"`, `allowReservationExtension: false`). The form has to be completed within that time.
-- B3. The existing appointment can be moved to a new time (`maxReschedules: -1`, `cancelTimeEnabled: false`). If so, rescheduling avoids holding two appointments and the risk in 6. The confirmation e-mail contains a personal link that opens the modify and cancel page of the appointment. Anyone with that link can cancel the appointment, so it must not be shared or committed. Can be checked before a slot appears: open the link, see whether the page offers a new date and time, and stop before selecting a time or pressing cancel.
+- B3. The existing appointment can be moved to a new date and time. Strongly supported, not yet tried: the app has the route `#/{appointmentId}/reschedule` and the button "I want to reschedule my appointment"; `maxReschedules: -1`, `cancelTimeEnabled: false`, and the e-mail check of the reschedule page is off (`validateEmail: false`). The confirmation e-mail contains a personal link to the appointment page; anyone with it can cancel the appointment, so it must not be shared, committed or sent through ntfy. Can be checked before a slot appears: open the link, tap "I want to reschedule my appointment", look at the calendar and leave without selecting a time or pressing cancel.
 - B4. Information from guides: unlimited cancellations, no cancellation e-mail, the document list, office hours, phone booking (2.6, 6). Needs the official PPA pages or a call to PPA.
 
 Checked by the tests once the code exists (5)
