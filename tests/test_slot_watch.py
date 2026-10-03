@@ -533,6 +533,48 @@ class TestLinks(unittest.TestCase):
         self.assertEqual([a["label"] for a in notifier.links[0]["actions"]], ["Open calendar"])
 
 
+class TestAppointmentLink(unittest.TestCase):
+    """With APPOINTMENT_LINK, a slot notification opens the page that moves the appointment."""
+
+    LINK = "https://broneering.politsei.ee/qmaticwebbooking/#/" + "0123456789abcdef" * 4   # not a real one
+
+    def test_accepted_forms(self):
+        for link in (self.LINK, self.LINK + "?lang=en_en", self.LINK + "/reschedule?lang=et_ee",
+                     self.LINK.replace("/#/", "#/"), " " + self.LINK + " "):
+            with self.subTest(link=link):
+                self.assertEqual(make_settings(APPOINTMENT_LINK=link).appointment_link, self.LINK)
+
+    def test_bad_link_is_not_printed(self):
+        with self.assertRaises(sw.SettingsError) as caught:
+            make_settings(APPOINTMENT_LINK="https://example.com/secret-value")
+        self.assertIn("APPOINTMENT_LINK", str(caught.exception))
+        self.assertNotIn("secret-value", str(caught.exception))
+
+    def test_reschedule_url(self):
+        self.assertEqual(sw.reschedule_url(make_settings(APPOINTMENT_LINK=self.LINK)),
+                         self.LINK + "/reschedule?lang=en_en")
+
+    def test_slot_notification_opens_the_reschedule_page(self):
+        fetch = FakeFetch()
+        fetch.times = {"2026-10-14": ["09:15"]}
+        watcher, notifier = make_watcher(fetch, APPOINTMENT_LINK=self.LINK)
+        watcher.run_cycle()
+        fetch.dates = ["2026-10-14"]
+        watcher.run_cycle()
+        (title, body, _), links = notifier.sent[1], notifier.links[1]
+        self.assertEqual(title, "Earlier slot, Tallinn Tammsaare, 14.10")
+        self.assertEqual(links["click"], self.LINK + "/reschedule?lang=en_en")
+        self.assertEqual([a["label"] for a in links["actions"]], ["Reschedule", "Email school"])
+        self.assertIn("Current appointment 27.10.2026. Tap to move it to the new time.", body)
+
+    def test_test_notification(self):
+        notifier = FakeNotifier()
+        sw.send_test_notification(make_settings(APPOINTMENT_LINK=self.LINK), notifier, NOW)
+        self.assertEqual(notifier.links[0]["click"], self.LINK + "/reschedule?lang=en_en")
+        self.assertEqual([a["label"] for a in notifier.links[0]["actions"]], ["Reschedule", "Email school"])
+        self.assertIn("do not select a time", notifier.sent[0][1])
+
+
 class TestMessages(unittest.TestCase):
     def test_format_day(self):
         self.assertEqual(sw.format_day("2026-10-14"), "Wed 14.10.2026")

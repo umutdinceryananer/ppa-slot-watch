@@ -22,6 +22,7 @@ User preferences
 - The bot runs continuously on a Huawei MateBook with Linux Mint XFCE.
 - Everything in the project is in English: code, comments, user-facing messages, settings, command line options, file names and documentation.
 - Before the appointment, the school sends documents about the user to the office. A new appointment must leave the school enough working days for that, so days that are too close are not reported (4.2).
+- One flow when a slot appears, decided with the user on 3 October 2026: tapping the notification opens the page that moves the existing appointment (`APPOINTMENT_LINK`), the user selects the time and confirms, then sends the e-mail to the school from the notification's button.
 
 Out of scope
 
@@ -87,7 +88,7 @@ The response is wrapped: `{"value": [...]}`. Each office has `id` (the branchPub
 
 Other requests the UI sends on page load: `configuration`, `serviceTemplates`, `customer`, `uiMessages?lang=en_en`, `validateOnLoad` and `appointmentProfiles/`. The bot does not need them. `configuration` holds the booking rules quoted in 2.6. [verified]
 
-UI routes, read from the app script `assets/index-*.js` on 3 October 2026 [verified]: `#/preselect/branch/{branchPublicId}/services/{servicePublicId}` opens the booking page with the office and the service selected, directly at the calendar; it was tried in the browser, and `restrictUrl: false` in the configuration allows it. `#/{appointmentId}` is the page of an existing appointment, the "modify or cancel" link of the confirmation e-mail, and `#/{appointmentId}/reschedule` moves the appointment to a new date and time. The appointment link lets anyone change or cancel the appointment, so the bot never sends it. A `lang` parameter after any route, `?lang=en_en` for English or `?lang=et_ee` for Estonian, selects the language and stores it in the browser; it is read by the app's main component, so it also works on the appointment page. Without it the site shows its default language, Estonian (`qmaticWebBookingDefaultLanguage: "et_EE"`), unless the browser remembers another choice. Both values were tried on the calendar address on 3 October 2026.
+UI routes, read from the app script `assets/index-*.js` on 3 October 2026 [verified]: `#/preselect/branch/{branchPublicId}/services/{servicePublicId}` opens the booking page with the office and the service selected, directly at the calendar; it was tried in the browser, and `restrictUrl: false` in the configuration allows it. `#/{appointmentId}` is the page of an existing appointment, the "modify or cancel" link of the confirmation e-mail, and `#/{appointmentId}/reschedule` moves the appointment to a new date and time. The appointment link lets anyone change or cancel the appointment, so it is kept only in the local settings and sent only inside slot notifications (4.4). On 3 October 2026 the user's real link opened, in English, a page with the buttons "I want to reschedule my appointment" and "I want to cancel my appointment", and `#/{appointmentId}/reschedule` opened the reschedule calendar directly, with the first free day selected and a "Reschedule appointment" button. Nothing was selected or confirmed. A `lang` parameter after any route, `?lang=en_en` for English or `?lang=et_ee` for Estonian, selects the language and stores it in the browser; it is read by the app's main component, so it also works on the appointment page. Without it the site shows its default language, Estonian (`qmaticWebBookingDefaultLanguage: "et_EE"`), unless the browser remembers another choice. Both values were tried on the calendar address on 3 October 2026.
 
 Booking and confirmation endpoints were not examined, they are out of scope. Selecting a time in the UI may hold the slot, so the verification stopped at the date step.
 
@@ -306,9 +307,9 @@ Each output line starts with PASS, FAIL, WARN, INFO or SKIP and the assumption I
 - Publishing uses a JSON body: `POST https://ntfy.sh/`, `Content-Type: application/json`, body fields `topic`, `title`, `message`, `priority` and `click`.
 - Publishing with headers is not used. `http.client` encodes header values as latin-1, which fails on characters outside it, for example š and ž in Estonian names or emoji. JSON bodies do not have this problem.
 - Priorities: 5 for a new slot and for a startup message that lists earlier slots, 4 for errors, 3 for startup and recovery, 2 for the daily status.
-- Tapping a new-slot notification, or a startup message that lists slots, opens the booking page of the office with the earliest slot, at the calendar, with the office and the service selected (2.2). Other messages open the start of the booking page. All these addresses end with `?lang=` and `BOOKING_LANGUAGE` (default `en_en`), so the page opens in English.
-- New-slot messages carry two buttons (ntfy view actions; the ntfy documentation lists them as supported on Android, iOS and the web; on iOS they show when the notification is pressed and held): "Open calendar", the same address, and "Email school", a `mailto:` link to `SCHOOL_EMAIL` with the subject and text of `SCHOOL_EMAIL_SUBJECT` and `SCHOOL_EMAIL_BODY`, filled in with the date and the earliest time of the slot, the office and the current appointment. Without `SCHOOL_EMAIL` only the first button is sent.
-- Anyone who knows the topic name can read the messages. They carry no personal data: office, date and time, and the school's address and e-mail text, which must not contain the user's name or student number. The link of the user's own appointment page is never sent, because it allows cancelling the appointment.
+- Tapping a new-slot notification, or a startup message that lists slots, opens the reschedule page of the user's appointment when `APPOINTMENT_LINK` is set, otherwise the booking page of the office with the earliest slot, at the calendar, with the office and the service selected (2.2). Other messages open the start of the booking page. All these addresses end with `?lang=` and `BOOKING_LANGUAGE` (default `en_en`), so the pages open in English.
+- New-slot messages carry two buttons (ntfy view actions; the ntfy documentation lists them as supported on Android, iOS and the web; on iOS they show when the notification is pressed and held): "Reschedule", or "Open calendar" without `APPOINTMENT_LINK`, with the same address as the tap, and "Email school", a `mailto:` link to `SCHOOL_EMAIL` with the subject and text of `SCHOOL_EMAIL_SUBJECT` and `SCHOOL_EMAIL_BODY`, filled in with the date and the earliest time of the slot, the office and the current appointment. Without `SCHOOL_EMAIL` only the first button is sent.
+- Anyone who knows the topic name can read the messages. They carry no personal data: office, date and time, and the school's address and e-mail text, which must not contain the user's name or student number. With `APPOINTMENT_LINK`, slot messages also carry the link of the user's appointment page, which allows changing or cancelling the appointment. The user accepted this on 3 October 2026 for the one-tap flow; the topic must stay secret. The bot never prints the link.
 - The topic is a random, hard-to-guess name. The real topic lives only in `settings.py`, which is in `.gitignore`. `settings.example.py` holds a placeholder, and the bot refuses to start while the placeholder is set. No committed file contains the real topic.
 - The ntfy app is installed on the phone and subscribed to the topic.
 - As an extra alert on the desktop, `notify-send` and `paplay` are used when present, otherwise they are skipped silently.
@@ -320,12 +321,12 @@ Title    Earlier slot, Tallinn Tammsaare, 14.10
 Body     Tallinn Tammsaare
          Wed 14.10.2026  09:15, 10:15
          Thu 15.10.2026  13:15
-         Current appointment 27.10.2026. Tap to book.
+         Current appointment 27.10.2026. Tap to move it to the new time.
          Book and email the school the new date before 12:00 today.
-Buttons  Open calendar, Email school
+Buttons  Reschedule, Email school
 ```
 
-The reminder line appears when the school rule is on (4.2), the "Email school" button when `SCHOOL_EMAIL` is set.
+The reminder line appears when the school rule is on (4.2), the "Email school" button when `SCHOOL_EMAIL` is set. Without `APPOINTMENT_LINK` the text says "Tap to book." and the first button is "Open calendar".
 
 ### 4.5 Settings
 
@@ -349,6 +350,7 @@ The only file the user edits is `settings.py`. A Python file was chosen because 
 | `DESKTOP_ALERTS` | `True` | notify-send and sound |
 | `USER_AGENT` | value naming the bot | See 2.4 |
 | `EXTRA_CA_FILE` | `"certs/gogetssl-rsa-dv-ca.pem"` | Intermediate missing from the server chain, see 2.5. `None` turns it off |
+| `APPOINTMENT_LINK` | `None` | The "modify or cancel" link of the confirmation e-mail; with it, tapping a slot notification opens the page that moves the appointment. Only in `settings.py` |
 | `BOOKING_LANGUAGE` | `"en_en"` | Language of the booking page opened from a notification; `"et_ee"` Estonian; `None` the site's default |
 | `SCHOOL_EMAIL` | `"study@taltech.ee"` | Address of the "Email school" button; `None` removes it |
 | `SCHOOL_EMAIL_SUBJECT` | `"Earlier PPA appointment: {date} {time}"` | Subject of that e-mail |
@@ -465,11 +467,13 @@ ppa-slot-watch/
 
 ## 6. When a notification arrives
 
-1. Move the existing appointment instead of booking a second one. Open the appointment page (the "modify or cancel" link of the confirmation e-mail, kept as a home screen shortcut on the phone and never in the repository), choose "I want to reschedule my appointment", select the new date and time and confirm (B3 in 7.2). A second appointment is refused while the current one exists (B1). Selecting a time holds it for 10 minutes without extension (B2).
-2. If moving is not offered, book through the notification ("Open calendar") and cancel the 27.10 appointment, so that the slot opens for someone else. The site asks to cancel the old appointment first; the new time stays held for 10 minutes, and if that time runs out, both may be lost.
-3. Right after that, send the e-mail to the school with the "Email school" button, before the moment named in the last line of the notification. Check the time in the e-mail; it names the earliest time of the day. The school confirmed that such an e-mail is enough for it to send its invitation document to the office (U4).
-4. Update `CURRENT_APPOINTMENT` with the new date and restart the bot, or stop it.
+1. Tap the notification. With `APPOINTMENT_LINK` set, the reschedule page of the current appointment opens, in English, with the first free day selected; normally that is the day of the notification.
+2. Select the time and confirm with "Reschedule appointment". No form: the name and contact details are already part of the appointment. Selecting a time holds it for 10 minutes without extension (B2).
+3. Tap "Email school" in the notification and send the e-mail before the moment named in its last line. Check the time in the e-mail; it names the earliest time of the day. The school confirmed that such an e-mail is enough for it to send its invitation document to the office (U4).
+4. Update `CURRENT_APPOINTMENT` with the new date and restart the bot, or stop it. If the confirmation e-mail of the moved appointment has a different link, update `APPOINTMENT_LINK` too.
 5. The documents for an earlier day should be ready in advance: passport, completed application form, family information form, proof of payment of the state fee and a 40x50 mm colour photo (TalTech's list), proof of income (bank statements; the migration advisor confirms whether a translation is needed) and the student status certificate issued by the study consultant.
+
+Without `APPOINTMENT_LINK`, tapping opens the booking calendar for a new appointment. Booking there needs the form (2.6), and because only one active appointment is allowed (B1), the site asks to cancel the current one first; if the 10-minute hold of the new time runs out meanwhile, both may be lost.
 
 ## 7. Open questions and unverified assumptions
 
@@ -535,7 +539,7 @@ Shown only when booking
 
 - B1. Verified with the user on 3 October 2026: the site allows only one active appointment, so a second residence permit appointment is refused while the current one exists; `serviceRestrictEnabled: true` with `serviceRestrictValue: 1` fits. The confirmation e-mail says that the appointment can only be used by the person in whose name it was made. Moving the appointment (B3) avoids the problem.
 - B2. Selecting a time reserves it for 10 minutes without extension (`reservationExpiryTimeSeconds: "600"`, `allowReservationExtension: false`). The form has to be completed within that time.
-- B3. The existing appointment can be moved to a new date and time. Strongly supported, not yet tried: the app has the route `#/{appointmentId}/reschedule` and the button "I want to reschedule my appointment"; `maxReschedules: -1`, `cancelTimeEnabled: false`, and the e-mail check of the reschedule page is off (`validateEmail: false`). The confirmation e-mail contains a personal link to the appointment page; anyone with it can cancel the appointment, so it must not be shared, committed or sent through ntfy. Can be checked before a slot appears: open the link, tap "I want to reschedule my appointment", look at the calendar and leave without selecting a time or pressing cancel.
+- B3. Verified in part on 3 October 2026: the user's appointment page offers "I want to reschedule my appointment", and `#/{appointmentId}/reschedule` opens the reschedule calendar directly with the first free day selected and a "Reschedule appointment" button (2.2). `maxReschedules: -1`, `cancelTimeEnabled: false`, and the reschedule page has no e-mail check (`validateEmail: false`). Not tried: the move itself; the first real move will show whether a CAPTCHA or another step follows the button.
 - B4. Information from guides: unlimited cancellations, no cancellation e-mail, the document list, office hours, phone booking (2.6, 6). Needs the official PPA pages or a call to PPA.
 
 Checked by the tests once the code exists (5)

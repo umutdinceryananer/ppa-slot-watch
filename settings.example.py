@@ -34,6 +34,15 @@ BOOKING_MINUTES = 30
 # browser remembers another choice.
 BOOKING_LANGUAGE = "en_en"
 
+# The "modify or cancel" link at the end of the PPA confirmation e-mail, like
+# "https://broneering.politsei.ee/qmaticwebbooking/#/<long id>". With it,
+# tapping a slot notification opens the page that moves your appointment to
+# another time: select the time and confirm, no form. Anyone who has this link
+# can cancel the appointment: keep it only in settings.py, never in git. It
+# travels inside the notification through ntfy, so keep the topic secret.
+# None: tapping opens the booking calendar for a new appointment instead.
+APPOINTMENT_LINK = None
+
 # The "Email school" button of a slot notification opens your mail app with an
 # e-mail to this address, filled in with the slot. {date}, {time}, {office} and
 # {current} are replaced; {time} is the earliest time of the day, so correct it

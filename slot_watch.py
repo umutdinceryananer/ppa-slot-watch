@@ -89,6 +89,7 @@ DEFAULTS = {
     "USER_AGENT": "Mozilla/5.0 (X11; Linux x86_64) ppa-slot-watch/1.0",
     "EXTRA_CA_FILE": "certs/gogetssl-rsa-dv-ca.pem",
     "BOOKING_LANGUAGE": "en_en",
+    "APPOINTMENT_LINK": None,
     "SCHOOL_EMAIL": "study@taltech.ee",
     "SCHOOL_EMAIL_SUBJECT": "Earlier PPA appointment: {date} {time}",
     "SCHOOL_EMAIL_BODY": (
@@ -149,6 +150,7 @@ class Settings:
     school_email_subject: str
     school_email_body: str
     booking_language: Optional[str]   # "en_en", "et_ee", or None for the site's default
+    appointment_link: Optional[str]   # ".../qmaticwebbooking/#/<id>" of the user's appointment, or None
 
 
 def load_settings(path, require_topic=True):
@@ -268,6 +270,14 @@ def validate_settings(raw, require_topic=True, base_dir=PROJECT_DIR):
     if not isinstance(agent, str) or not agent.strip():
         fail("USER_AGENT", "expected a non-empty text")
 
+    appointment_link = raw["APPOINTMENT_LINK"]
+    if appointment_link is not None:
+        match = APPOINTMENT_LINK_RE.fullmatch(appointment_link.strip()) if isinstance(appointment_link, str) else None
+        if not match:  # the value is not printed: it gives access to the appointment
+            fail("APPOINTMENT_LINK", 'expected None or the "modify or cancel" link of the confirmation e-mail, '
+                                     "like https://broneering.politsei.ee/qmaticwebbooking/#/<long id>")
+        appointment_link = f"{match.group('base')}/#/{match.group('id')}"
+
     language = raw["BOOKING_LANGUAGE"]
     if language is not None and (not isinstance(language, str) or not re.fullmatch(r"[a-z]{2}_[a-z]{2}", language)):
         fail("BOOKING_LANGUAGE", f'expected None or a language code like "en_en" or "et_ee", got {language!r}')
@@ -302,7 +312,7 @@ def validate_settings(raw, require_topic=True, base_dir=PROJECT_DIR):
         error_alert_threshold=threshold, desktop_alerts=raw["DESKTOP_ALERTS"],
         user_agent=agent, extra_ca_file=ca_file, school_email=school_email,
         school_email_subject=raw["SCHOOL_EMAIL_SUBJECT"], school_email_body=raw["SCHOOL_EMAIL_BODY"],
-        booking_language=language,
+        booking_language=language, appointment_link=appointment_link,
     )
 
 
@@ -346,6 +356,18 @@ def times_url(dates_url, day):
     return dates_url.replace("/dates;", f"/dates/{day}/times;", 1)
 
 
+# The "modify or cancel" link of the confirmation e-mail: .../qmaticwebbooking/#/<appointment id>
+APPOINTMENT_LINK_RE = re.compile(
+    r"(?P<base>https?://[^\s#]+?)/?#/(?P<id>[0-9A-Fa-f]{16,})(?:/reschedule)?/?(?:\?[^\s#]*)?"
+)
+
+
+def reschedule_url(settings):
+    """The page that moves the user's appointment to a new date and time, in BOOKING_LANGUAGE."""
+    language = settings.booking_language
+    return f"{settings.appointment_link}/reschedule" + (f"?lang={language}" if language else "")
+
+
 def booking_url(office, route, language=None):
     """An address of the booking page, in the given language ("en_en", "et_ee") or the site's default."""
     base = office.url.split("/rest/schedule/")[0]  # https://broneering.politsei.ee/qmaticwebbooking
@@ -360,7 +382,7 @@ def calendar_url(office, language=None):
     return booking_url(office, f"preselect/branch/{office.branch_id}/services/{office.service_id}", language)
 
 
-def school_mailto(settings, office_name, day, times):
+def school_mailto(settings, office_name, day, times, subject_prefix=""):
     """A mailto: link with the e-mail to the school, filled in with the found slot.
 
     The earliest time of the day is used; the user corrects it when booking
@@ -374,10 +396,28 @@ def school_mailto(settings, office_name, day, times):
         "office": office_name,
         "current": f"{settings.current_appointment:%d.%m.%Y}",
     }
-    subject = settings.school_email_subject.format(**values)
+    subject = subject_prefix + settings.school_email_subject.format(**values)
     body = settings.school_email_body.format(**values).replace("\n", "\r\n")
     return (f"mailto:{settings.school_email}?subject={urllib.parse.quote(subject, safe='')}"
             f"&body={urllib.parse.quote(body, safe='')}")
+
+
+def slot_actions(settings, office, day, times, subject_prefix=""):
+    """Tap target and buttons of a slot notification (4.4).
+
+    With APPOINTMENT_LINK, tapping opens the page that moves the user's
+    appointment; without it, the booking calendar of the office. "Email school"
+    opens the e-mail to the school about the slot.
+    """
+    if settings.appointment_link:
+        click, label = reschedule_url(settings), "Reschedule"
+    else:
+        click, label = calendar_url(office, settings.booking_language), "Open calendar"
+    actions = [{"action": "view", "label": label, "url": click}]
+    mailto = school_mailto(settings, office.name, day, times, subject_prefix)
+    if mailto:
+        actions.append({"action": "view", "label": "Email school", "url": mailto})
+    return click, actions
 
 
 # --------------------------------------------------------------- responses
@@ -562,7 +602,7 @@ def too_close_dates(dates, now, settings):
     return [day for day in dates if now.date().isoformat() <= day < first and day < last]
 
 
-def new_slots_message(new_by_office, current_appointment, reminder=None):
+def new_slots_message(new_by_office, current_appointment, reminder=None, move=False):
     """Title and body of the notification about new earlier slots (4.4)."""
     earliest = min(day for slots in new_by_office.values() for day in slots)
     short = datetime.date.fromisoformat(earliest).strftime("%d.%m")
@@ -572,7 +612,8 @@ def new_slots_message(new_by_office, current_appointment, reminder=None):
     else:
         title = f"Earlier slots at {len(names)} offices, {short}"
     blocks = ["\n".join([name] + format_slots(slots)) for name, slots in new_by_office.items()]
-    body = "\n\n".join(blocks) + f"\nCurrent appointment {current_appointment:%d.%m.%Y}. Tap to book."
+    tap = "Tap to move it to the new time." if move else "Tap to book."
+    body = "\n\n".join(blocks) + f"\nCurrent appointment {current_appointment:%d.%m.%Y}. {tap}"
     if reminder:
         body += "\n" + reminder
     return title, body
@@ -847,7 +888,8 @@ class Watcher:
             self.send_startup_message(now)
         if new_by_office:
             title, body = new_slots_message(new_by_office, self.settings.current_appointment,
-                                            school_reminder(now, self.settings))
+                                            school_reminder(now, self.settings),
+                                            move=bool(self.settings.appointment_link))
             click, actions = self.slot_links(new_by_office)
             self.notify(title, body, 5, desktop=True, click=click, actions=actions)
         self.forget_old_history(now)
@@ -888,20 +930,11 @@ class Watcher:
         state.alerted = True
 
     def slot_links(self, slots_by_office):
-        """Tap target and buttons of a slot notification (4.4).
-
-        Tapping opens the calendar of the office with the earliest slot. The
-        buttons open that calendar and an e-mail to the school about the slot.
-        """
+        """Tap target and buttons for the earliest slot of a notification (4.4)."""
         name, day = min(((name, day) for name, slots in slots_by_office.items() for day in slots),
                         key=lambda pair: pair[1])
         office = next(office for office in self.settings.offices if office.name == name)
-        click = calendar_url(office, self.settings.booking_language)
-        actions = [{"action": "view", "label": "Open calendar", "url": click}]
-        mailto = school_mailto(self.settings, name, day, slots_by_office[name][day])
-        if mailto:
-            actions.append({"action": "view", "label": "Email school", "url": mailto})
-        return click, actions
+        return slot_actions(self.settings, office, day, slots_by_office[name][day])
 
     def send_startup_message(self, now):
         """One message with the earliest date and the current candidates of each office (4.2)."""
@@ -1011,8 +1044,8 @@ def send_test_notification(settings, notifier, now):
     """--test-notification: a test message with the buttons of a slot message (4.6).
 
     The buttons use a sample slot on the first day that could be reported, at
-    09:15, so that the calendar link and the e-mail draft can be tried before a
-    real slot appears. The subject of the draft starts with "[TEST]", and the
+    09:15, so that the links and the e-mail draft can be tried before a real
+    slot appears. The subject of the draft starts with "[TEST]", and the
     message asks not to send it.
     """
     office = settings.offices[0]
@@ -1020,15 +1053,14 @@ def send_test_notification(settings, notifier, now):
     while day.weekday() >= 5:  # offices are closed at weekends
         day += datetime.timedelta(days=1)
     sample = day.isoformat()
-    test_settings = dataclasses.replace(settings, school_email_subject="[TEST] " + settings.school_email_subject)
-    click = calendar_url(office, settings.booking_language)
-    actions = [{"action": "view", "label": "Open calendar", "url": click}]
-    mailto = school_mailto(test_settings, office.name, sample, frozenset({"09:15"}))
-    lines = ["Test message. If you read this, notifications work. Non-ASCII text: Jõhvi, Pärnu."]
-    if mailto:
-        actions.append({"action": "view", "label": "Email school", "url": mailto})
-        lines.append(f"The buttons use a sample slot, {format_day(sample)} 09:15. "
-                     "\"Email school\" only opens a draft marked [TEST]: do not send it, delete the draft.")
+    click, actions = slot_actions(settings, office, sample, frozenset({"09:15"}), subject_prefix="[TEST] ")
+    lines = ["Test message. If you read this, notifications work. Non-ASCII text: Jõhvi, Pärnu.",
+             f"The buttons use a sample slot, {format_day(sample)} 09:15."]
+    if settings.appointment_link:
+        lines.append("Tapping this message or \"Reschedule\" opens your real appointment: "
+                     "look at it, but do not select a time.")
+    if settings.school_email:
+        lines.append("\"Email school\" only opens a draft marked [TEST]: do not send it, delete the draft.")
     return notifier.send("ppa-slot-watch test", "\n".join(lines), 3, click=click, actions=actions)
 
 
