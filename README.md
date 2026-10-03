@@ -53,7 +53,7 @@ Only needed when booking anew; moving an appointment asks for no personal data. 
 - iPhone: open Settings, Apps, Safari, AutoFill (on older iOS: Settings, Safari, AutoFill). Turn on "Use Contact Info" and choose your own contact card under "My Info". Check that the card in Contacts has your name, e-mail and phone number. In the form, tap the first field and choose the AutoFill suggestion above the keyboard.
 - Android, Chrome: open Chrome, Settings, "Addresses and more", turn on saving and filling addresses and add your name, e-mail and phone number. In the form, tap a field and choose the suggestion.
 
-Fields the phone does not know, for example a personal identification code, still have to be typed.
+According to the site's configuration, the form asks for first name, last name, date of birth, e-mail and phone number; Estonia is preselected as the phone's country and e-mail as the way to be notified. No personal identification code and no address. AutoFill fills the name, e-mail and phone number; type the date of birth (DD.MM.YYYY).
 
 ## Home screen shortcut to your appointment page
 
