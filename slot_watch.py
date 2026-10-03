@@ -35,6 +35,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Optional
 
@@ -87,7 +88,19 @@ DEFAULTS = {
     "DESKTOP_ALERTS": True,
     "USER_AGENT": "Mozilla/5.0 (X11; Linux x86_64) ppa-slot-watch/1.0",
     "EXTRA_CA_FILE": "certs/gogetssl-rsa-dv-ca.pem",
+    "SCHOOL_EMAIL": "study@taltech.ee",
+    "SCHOOL_EMAIL_SUBJECT": "Earlier PPA appointment: {date} {time}",
+    "SCHOOL_EMAIL_BODY": (
+        "Hello,\n\n"
+        "My residence permit appointment at the PPA {office} service office was on {current}. "
+        "I have found an earlier appointment on {date} at {time}. "
+        "Could you please send the documents to the office for the new date today?\n\n"
+        "Thank you."
+    ),
 }
+
+# Placeholders of SCHOOL_EMAIL_SUBJECT and SCHOOL_EMAIL_BODY
+EMAIL_PLACEHOLDERS = ("date", "time", "office", "current")
 
 TLS_HELP = (
     "TLS certificate verification failed. broneering.politsei.ee does not send its "
@@ -131,6 +144,9 @@ class Settings:
     desktop_alerts: bool
     user_agent: str
     extra_ca_file: Optional[str]       # absolute path or None
+    school_email: Optional[str]        # address for the "Email school" button, or None
+    school_email_subject: str
+    school_email_body: str
 
 
 def load_settings(path, require_topic=True):
@@ -250,6 +266,20 @@ def validate_settings(raw, require_topic=True, base_dir=PROJECT_DIR):
     if not isinstance(agent, str) or not agent.strip():
         fail("USER_AGENT", "expected a non-empty text")
 
+    school_email = raw["SCHOOL_EMAIL"]
+    if school_email is not None and (not isinstance(school_email, str)
+                                     or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", school_email)):
+        fail("SCHOOL_EMAIL", f"expected None or an e-mail address, got {school_email!r}")
+    for key in ("SCHOOL_EMAIL_SUBJECT", "SCHOOL_EMAIL_BODY"):
+        template = raw[key]
+        if not isinstance(template, str) or not template.strip():
+            fail(key, "expected a text")
+        try:
+            template.format(**{name: "" for name in EMAIL_PLACEHOLDERS})
+        except (KeyError, IndexError, ValueError) as exc:
+            fail(key, f"unknown placeholder or stray brace ({exc!r}); "
+                      "the placeholders are {date}, {time}, {office} and {current}")
+
     ca_file = raw["EXTRA_CA_FILE"]
     if ca_file is not None:
         if not isinstance(ca_file, str) or not ca_file.strip():
@@ -264,7 +294,8 @@ def validate_settings(raw, require_topic=True, base_dir=PROJECT_DIR):
         school_workdays=school_workdays, booking_minutes=booking_minutes, offices=offices, check_interval=interval, time_window=window, weekdays=weekdays,
         ntfy_server=server, ntfy_topic=topic, daily_report_hour=hour,
         error_alert_threshold=threshold, desktop_alerts=raw["DESKTOP_ALERTS"],
-        user_agent=agent, extra_ca_file=ca_file,
+        user_agent=agent, extra_ca_file=ca_file, school_email=school_email,
+        school_email_subject=raw["SCHOOL_EMAIL_SUBJECT"], school_email_body=raw["SCHOOL_EMAIL_BODY"],
     )
 
 
@@ -306,6 +337,35 @@ def parse_office_url(url):
 def times_url(dates_url, day):
     """The address of the free times of one day: /dates; becomes /dates/{day}/times;"""
     return dates_url.replace("/dates;", f"/dates/{day}/times;", 1)
+
+
+def calendar_url(office):
+    """The booking page with the office and the service already selected (2.2).
+
+    It opens directly at the calendar, which saves two steps when booking.
+    """
+    base = office.url.split("/rest/schedule/")[0]  # https://broneering.politsei.ee/qmaticwebbooking
+    return f"{base}/#/preselect/branch/{office.branch_id}/services/{office.service_id}"
+
+
+def school_mailto(settings, office_name, day, times):
+    """A mailto: link with the e-mail to the school, filled in with the found slot.
+
+    The earliest time of the day is used; the user corrects it when booking
+    another one. None when SCHOOL_EMAIL is not set.
+    """
+    if not settings.school_email:
+        return None
+    values = {
+        "date": format_day(day),
+        "time": min(times) if times else "__:__",
+        "office": office_name,
+        "current": f"{settings.current_appointment:%d.%m.%Y}",
+    }
+    subject = settings.school_email_subject.format(**values)
+    body = settings.school_email_body.format(**values).replace("\n", "\r\n")
+    return (f"mailto:{settings.school_email}?subject={urllib.parse.quote(subject, safe='')}"
+            f"&body={urllib.parse.quote(body, safe='')}")
 
 
 # --------------------------------------------------------------- responses
@@ -604,14 +664,18 @@ class Ntfy:
         self.topic = topic
         self.user_agent = user_agent
 
-    def send(self, title, message, priority):
-        body = json.dumps({
+    def send(self, title, message, priority, click=None, actions=None):
+        """click: address opened by tapping the notification; actions: up to 3 buttons."""
+        data = {
             "topic": self.topic,
             "title": title,
             "message": message,
             "priority": priority,
-            "click": BOOKING_PAGE,
-        }).encode("utf-8")
+            "click": click or BOOKING_PAGE,
+        }
+        if actions:
+            data["actions"] = actions
+        body = json.dumps(data).encode("utf-8")
         request = urllib.request.Request(self.url, data=body, method="POST", headers={
             "Content-Type": "application/json",
             "User-Agent": self.user_agent,
@@ -698,9 +762,9 @@ class Watcher:
         """Random pause between two requests (4.3)."""
         self.sleep(random.uniform(*self.pause_range))
 
-    def notify(self, title, message, priority, desktop=False):
+    def notify(self, title, message, priority, desktop=False, click=None, actions=None):
         if self.notifier is not None:
-            self.notifier.send(title, message, priority)
+            self.notifier.send(title, message, priority, click=click, actions=actions)
         if desktop and self.desktop is not None:
             self.desktop(title, message)
 
@@ -769,7 +833,8 @@ class Watcher:
         if new_by_office:
             title, body = new_slots_message(new_by_office, self.settings.current_appointment,
                                             school_reminder(now, self.settings))
-            self.notify(title, body, 5, desktop=True)
+            click, actions = self.slot_links(new_by_office)
+            self.notify(title, body, 5, desktop=True, click=click, actions=actions)
         self.forget_old_history(now)
         self.maybe_send_daily_report(now)
         self.failed_cycles = self.failed_cycles + 1 if outcome.failed else 0
@@ -807,6 +872,22 @@ class Watcher:
         self.notify(f"Check failing, {office.name}", text, 4)
         state.alerted = True
 
+    def slot_links(self, slots_by_office):
+        """Tap target and buttons of a slot notification (4.4).
+
+        Tapping opens the calendar of the office with the earliest slot. The
+        buttons open that calendar and an e-mail to the school about the slot.
+        """
+        name, day = min(((name, day) for name, slots in slots_by_office.items() for day in slots),
+                        key=lambda pair: pair[1])
+        office = next(office for office in self.settings.offices if office.name == name)
+        click = calendar_url(office)
+        actions = [{"action": "view", "label": "Open calendar", "url": click}]
+        mailto = school_mailto(self.settings, name, day, slots_by_office[name][day])
+        if mailto:
+            actions.append({"action": "view", "label": "Email school", "url": mailto})
+        return click, actions
+
     def send_startup_message(self, now):
         """One message with the earliest date and the current candidates of each office (4.2)."""
         self.started = True
@@ -831,7 +912,10 @@ class Watcher:
             lines.append(school_reminder(now, self.settings))
         lines.append(report_window_text(now, self.settings))
         lines.append(f"Checking every {self.base_interval():.0f} seconds.")
-        self.notify("ppa-slot-watch started", "\n".join(lines), priority, desktop=priority == 5)
+        found = {name: state.known for name, state in self.states.items() if state.known}
+        click, actions = self.slot_links(found) if found else (None, None)
+        self.notify("ppa-slot-watch started", "\n".join(lines), priority, desktop=priority == 5,
+                    click=click, actions=actions)
         hour = self.settings.daily_report_hour
         if hour is not None and now.hour >= hour:
             self.last_report_day = now.date()  # the startup message replaces today's report

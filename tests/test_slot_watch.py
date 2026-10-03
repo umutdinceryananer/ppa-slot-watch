@@ -77,9 +77,11 @@ class FakeFetch:
 class FakeNotifier:
     def __init__(self):
         self.sent = []               # (title, message, priority)
+        self.links = []              # {"click": ..., "actions": ...} of each message
 
-    def send(self, title, message, priority):
+    def send(self, title, message, priority, click=None, actions=None):
         self.sent.append((title, message, priority))
+        self.links.append({"click": click, "actions": actions})
         return True
 
     def titles(self, start):
@@ -456,6 +458,56 @@ class TestDailyReport(unittest.TestCase):
         self.assertEqual([m for m in notifier.sent if m[2] == 2], [])
 
 
+class TestLinks(unittest.TestCase):
+    """Tapping a slot notification and its buttons (4.4)."""
+
+    def test_calendar_url(self):
+        office = make_settings().offices[0]
+        self.assertEqual(sw.calendar_url(office),
+                         "https://broneering.politsei.ee/qmaticwebbooking/#/preselect/branch/"
+                         f"{BRANCH}/services/{SERVICE}")
+
+    def test_school_mailto(self):
+        url = sw.school_mailto(make_settings(), "Tallinn Tammsaare", "2026-10-06", frozenset({"10:15", "09:15"}))
+        address, query = url.split("?", 1)
+        self.assertEqual(address, "mailto:study@taltech.ee")
+        fields = dict(part.split("=", 1) for part in query.split("&"))
+        self.assertEqual(sw.urllib.parse.unquote(fields["subject"]), "Earlier PPA appointment: Tue 06.10.2026 09:15")
+        body = sw.urllib.parse.unquote(fields["body"])
+        self.assertTrue(body.startswith("Hello,\r\n\r\nMy residence permit appointment at the PPA "
+                                        "Tallinn Tammsaare service office was on 27.10.2026. "
+                                        "I have found an earlier appointment on Tue 06.10.2026 at 09:15."))
+        self.assertNotIn(" ", query)   # everything is percent-encoded
+
+    def test_unknown_times_leave_a_blank_to_fill(self):
+        url = sw.school_mailto(make_settings(), "Tallinn Tammsaare", "2026-10-06", None)
+        self.assertIn("__%3A__", url)
+
+    def test_no_school_email(self):
+        self.assertIsNone(sw.school_mailto(make_settings(SCHOOL_EMAIL=None), "x", "2026-10-06", None))
+
+    def test_slot_notification_links(self):
+        fetch = FakeFetch()
+        fetch.times = {"2026-10-14": ["09:15"]}
+        watcher, notifier = make_watcher(fetch)
+        watcher.run_cycle()
+        fetch.dates = ["2026-10-14"]
+        watcher.run_cycle()
+        startup, slot = notifier.links
+        self.assertIsNone(startup["click"])          # the startup message without slots opens the home page
+        self.assertEqual(slot["click"], sw.calendar_url(watcher.settings.offices[0]))
+        self.assertEqual([a["label"] for a in slot["actions"]], ["Open calendar", "Email school"])
+        self.assertIn("Wed%2014.10.2026%2009%3A15", slot["actions"][1]["url"])
+
+    def test_without_school_email_only_the_calendar_button(self):
+        fetch = FakeFetch()
+        fetch.dates = ["2026-10-14"]
+        fetch.times = {"2026-10-14": ["09:15"]}
+        watcher, notifier = make_watcher(fetch, SCHOOL_EMAIL=None)
+        watcher.run_cycle()                          # startup message lists the slot
+        self.assertEqual([a["label"] for a in notifier.links[0]["actions"]], ["Open calendar"])
+
+
 class TestMessages(unittest.TestCase):
     def test_format_day(self):
         self.assertEqual(sw.format_day("2026-10-14"), "Wed 14.10.2026")
@@ -519,6 +571,9 @@ class TestSettings(unittest.TestCase):
             "ERROR_ALERT_THRESHOLD": 0,
             "DESKTOP_ALERTS": "yes",
             "EXTRA_CA_FILE": "certs/missing.pem",
+            "SCHOOL_EMAIL": "study at taltech",
+            "SCHOOL_EMAIL_SUBJECT": "New appointment {day}",
+            "SCHOOL_EMAIL_BODY": "",
         }
         for key, value in cases.items():
             with self.subTest(key=key):
@@ -671,9 +726,17 @@ class TestEndToEnd(unittest.TestCase):
         self.assertEqual(second["title"], first["title"])
         self.assertIn("5 checks in a row failed. Last error: HTTP 503", failing["message"])
         self.assertEqual(recovered["title"], "Checks work again, Tallinn Tammsaare")
+        calendar = (f"http://127.0.0.1:{site.qmatic.server_port}/qmaticwebbooking/#/preselect/branch/"
+                    f"{BRANCH}/services/{SERVICE}")
         for message in site.messages:
             self.assertEqual(message["topic"], "test-topic")
-            self.assertEqual(message["click"], "https://broneering.politsei.ee/")
+            slot = message["title"].startswith("Earlier slot")
+            self.assertEqual(message["click"], calendar if slot else "https://broneering.politsei.ee/")
+            self.assertEqual("actions" in message, slot)
+        labels = [action["label"] for action in first["actions"]]
+        self.assertEqual(labels, ["Open calendar", "Email school"])
+        self.assertTrue(first["actions"][1]["url"].startswith(
+            "mailto:study@taltech.ee?subject=Earlier%20PPA%20appointment%3A%20Wed%2014.10.2026%2009%3A15&body="))
         self.assertEqual(delays, [240, 480, 900, 900, 900])
         times_requests = [path for path in site.requests if "/times;" in path]
         self.assertEqual(len(times_requests), 3)   # cycles 2, 4 and 10

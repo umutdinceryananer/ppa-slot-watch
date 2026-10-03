@@ -29,6 +29,21 @@ SCHOOL_EMAIL_DEADLINE = "12:00"
 SCHOOL_WORKDAYS = 0
 BOOKING_MINUTES = 30
 
+# The "Email school" button of a slot notification opens your mail app with an
+# e-mail to this address, filled in with the slot. {date}, {time}, {office} and
+# {current} are replaced; {time} is the earliest time of the day, so correct it
+# if you book another one. Do not put your name or student number here, the
+# text travels through ntfy; your mail signature adds them. None removes the button.
+SCHOOL_EMAIL = "study@taltech.ee"
+SCHOOL_EMAIL_SUBJECT = "Earlier PPA appointment: {date} {time}"
+SCHOOL_EMAIL_BODY = (
+    "Hello,\n\n"
+    "My residence permit appointment at the PPA {office} service office was on {current}. "
+    "I have found an earlier appointment on {date} at {time}. "
+    "Could you please send the documents to the office for the new date today?\n\n"
+    "Thank you."
+)
+
 # Offices to watch. "url" is the dates address the booking page uses for the
 # residence permit service at that office; docs/02-finding-ids.md explains how
 # to copy it from the browser. To watch another office, remove the # signs in
