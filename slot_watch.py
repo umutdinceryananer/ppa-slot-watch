@@ -88,6 +88,7 @@ DEFAULTS = {
     "DESKTOP_ALERTS": True,
     "USER_AGENT": "Mozilla/5.0 (X11; Linux x86_64) ppa-slot-watch/1.0",
     "EXTRA_CA_FILE": "certs/gogetssl-rsa-dv-ca.pem",
+    "BOOKING_LANGUAGE": "en_en",
     "SCHOOL_EMAIL": "study@taltech.ee",
     "SCHOOL_EMAIL_SUBJECT": "Earlier PPA appointment: {date} {time}",
     "SCHOOL_EMAIL_BODY": (
@@ -147,6 +148,7 @@ class Settings:
     school_email: Optional[str]        # address for the "Email school" button, or None
     school_email_subject: str
     school_email_body: str
+    booking_language: Optional[str]   # "en_en", "et_ee", or None for the site's default
 
 
 def load_settings(path, require_topic=True):
@@ -266,6 +268,10 @@ def validate_settings(raw, require_topic=True, base_dir=PROJECT_DIR):
     if not isinstance(agent, str) or not agent.strip():
         fail("USER_AGENT", "expected a non-empty text")
 
+    language = raw["BOOKING_LANGUAGE"]
+    if language is not None and (not isinstance(language, str) or not re.fullmatch(r"[a-z]{2}_[a-z]{2}", language)):
+        fail("BOOKING_LANGUAGE", f'expected None or a language code like "en_en" or "et_ee", got {language!r}')
+
     school_email = raw["SCHOOL_EMAIL"]
     if school_email is not None and (not isinstance(school_email, str)
                                      or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", school_email)):
@@ -296,6 +302,7 @@ def validate_settings(raw, require_topic=True, base_dir=PROJECT_DIR):
         error_alert_threshold=threshold, desktop_alerts=raw["DESKTOP_ALERTS"],
         user_agent=agent, extra_ca_file=ca_file, school_email=school_email,
         school_email_subject=raw["SCHOOL_EMAIL_SUBJECT"], school_email_body=raw["SCHOOL_EMAIL_BODY"],
+        booking_language=language,
     )
 
 
@@ -339,13 +346,18 @@ def times_url(dates_url, day):
     return dates_url.replace("/dates;", f"/dates/{day}/times;", 1)
 
 
-def calendar_url(office):
+def booking_url(office, route, language=None):
+    """An address of the booking page, in the given language ("en_en", "et_ee") or the site's default."""
+    base = office.url.split("/rest/schedule/")[0]  # https://broneering.politsei.ee/qmaticwebbooking
+    return f"{base}/#/{route}" + (f"?lang={language}" if language else "")
+
+
+def calendar_url(office, language=None):
     """The booking page with the office and the service already selected (2.2).
 
     It opens directly at the calendar, which saves two steps when booking.
     """
-    base = office.url.split("/rest/schedule/")[0]  # https://broneering.politsei.ee/qmaticwebbooking
-    return f"{base}/#/preselect/branch/{office.branch_id}/services/{office.service_id}"
+    return booking_url(office, f"preselect/branch/{office.branch_id}/services/{office.service_id}", language)
 
 
 def school_mailto(settings, office_name, day, times):
@@ -763,6 +775,9 @@ class Watcher:
         self.sleep(random.uniform(*self.pause_range))
 
     def notify(self, title, message, priority, desktop=False, click=None, actions=None):
+        """Send a notification. Without click, tapping it opens the booking page in BOOKING_LANGUAGE."""
+        if click is None:
+            click = booking_url(self.settings.offices[0], "", self.settings.booking_language)
         if self.notifier is not None:
             self.notifier.send(title, message, priority, click=click, actions=actions)
         if desktop and self.desktop is not None:
@@ -881,7 +896,7 @@ class Watcher:
         name, day = min(((name, day) for name, slots in slots_by_office.items() for day in slots),
                         key=lambda pair: pair[1])
         office = next(office for office in self.settings.offices if office.name == name)
-        click = calendar_url(office)
+        click = calendar_url(office, self.settings.booking_language)
         actions = [{"action": "view", "label": "Open calendar", "url": click}]
         mailto = school_mailto(self.settings, name, day, slots_by_office[name][day])
         if mailto:
@@ -1006,7 +1021,7 @@ def send_test_notification(settings, notifier, now):
         day += datetime.timedelta(days=1)
     sample = day.isoformat()
     test_settings = dataclasses.replace(settings, school_email_subject="[TEST] " + settings.school_email_subject)
-    click = calendar_url(office)
+    click = calendar_url(office, settings.booking_language)
     actions = [{"action": "view", "label": "Open calendar", "url": click}]
     mailto = school_mailto(test_settings, office.name, sample, frozenset({"09:15"}))
     lines = ["Test message. If you read this, notifications work. Non-ASCII text: Jõhvi, Pärnu."]

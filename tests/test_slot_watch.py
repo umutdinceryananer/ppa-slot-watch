@@ -463,9 +463,14 @@ class TestLinks(unittest.TestCase):
 
     def test_calendar_url(self):
         office = make_settings().offices[0]
-        self.assertEqual(sw.calendar_url(office),
-                         "https://broneering.politsei.ee/qmaticwebbooking/#/preselect/branch/"
-                         f"{BRANCH}/services/{SERVICE}")
+        calendar = f"https://broneering.politsei.ee/qmaticwebbooking/#/preselect/branch/{BRANCH}/services/{SERVICE}"
+        self.assertEqual(sw.calendar_url(office), calendar)
+        self.assertEqual(sw.calendar_url(office, "en_en"), calendar + "?lang=en_en")
+
+    def test_home_url(self):
+        office = make_settings().offices[0]
+        self.assertEqual(sw.booking_url(office, "", "en_en"),
+                         "https://broneering.politsei.ee/qmaticwebbooking/#/?lang=en_en")
 
     def test_school_mailto(self):
         url = sw.school_mailto(make_settings(), "Tallinn Tammsaare", "2026-10-06", frozenset({"10:15", "09:15"}))
@@ -494,8 +499,10 @@ class TestLinks(unittest.TestCase):
         fetch.dates = ["2026-10-14"]
         watcher.run_cycle()
         startup, slot = notifier.links
-        self.assertIsNone(startup["click"])          # the startup message without slots opens the home page
-        self.assertEqual(slot["click"], sw.calendar_url(watcher.settings.offices[0]))
+        # without slots, tapping opens the booking page in English
+        self.assertEqual(startup["click"], "https://broneering.politsei.ee/qmaticwebbooking/#/?lang=en_en")
+        self.assertEqual(slot["click"], sw.calendar_url(watcher.settings.offices[0], "en_en"))
+        self.assertTrue(slot["click"].endswith("?lang=en_en"))
         self.assertEqual([a["label"] for a in slot["actions"]], ["Open calendar", "Email school"])
         self.assertIn("Wed%2014.10.2026%2009%3A15", slot["actions"][1]["url"])
 
@@ -563,6 +570,7 @@ class TestSettings(unittest.TestCase):
     def test_example_file(self):
         settings = sw.load_settings(self.EXAMPLE, require_topic=False)
         self.assertEqual(settings.current_appointment, datetime.date(2026, 10, 27))
+        self.assertEqual(settings.booking_language, "en_en")
         self.assertEqual((settings.school_email_deadline, settings.school_workdays, settings.booking_minutes),
                          ("12:00", 0, 30))
         self.assertEqual(settings.offices[0].service_id, SERVICE)
@@ -590,6 +598,7 @@ class TestSettings(unittest.TestCase):
             "DESKTOP_ALERTS": "yes",
             "EXTRA_CA_FILE": "certs/missing.pem",
             "SCHOOL_EMAIL": "study at taltech",
+            "BOOKING_LANGUAGE": "English",
             "SCHOOL_EMAIL_SUBJECT": "New appointment {day}",
             "SCHOOL_EMAIL_BODY": "",
         }
@@ -744,12 +753,12 @@ class TestEndToEnd(unittest.TestCase):
         self.assertEqual(second["title"], first["title"])
         self.assertIn("5 checks in a row failed. Last error: HTTP 503", failing["message"])
         self.assertEqual(recovered["title"], "Checks work again, Tallinn Tammsaare")
-        calendar = (f"http://127.0.0.1:{site.qmatic.server_port}/qmaticwebbooking/#/preselect/branch/"
-                    f"{BRANCH}/services/{SERVICE}")
+        base = f"http://127.0.0.1:{site.qmatic.server_port}/qmaticwebbooking/#/"
+        calendar = f"{base}preselect/branch/{BRANCH}/services/{SERVICE}?lang=en_en"
         for message in site.messages:
             self.assertEqual(message["topic"], "test-topic")
             slot = message["title"].startswith("Earlier slot")
-            self.assertEqual(message["click"], calendar if slot else "https://broneering.politsei.ee/")
+            self.assertEqual(message["click"], calendar if slot else base + "?lang=en_en")
             self.assertEqual("actions" in message, slot)
         labels = [action["label"] for action in first["actions"]]
         self.assertEqual(labels, ["Open calendar", "Email school"])

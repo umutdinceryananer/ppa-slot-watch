@@ -29,6 +29,11 @@ SCHOOL_EMAIL_DEADLINE = "12:00"
 SCHOOL_WORKDAYS = 0
 BOOKING_MINUTES = 30
 
+# Language of the booking page opened from a notification: "en_en" English,
+# "et_ee" Estonian. None leaves it to the site, which shows Estonian unless the
+# browser remembers another choice.
+BOOKING_LANGUAGE = "en_en"
+
 # The "Email school" button of a slot notification opens your mail app with an
 # e-mail to this address, filled in with the slot. {date}, {time}, {office} and
 # {current} are replaced; {time} is the earliest time of the day, so correct it

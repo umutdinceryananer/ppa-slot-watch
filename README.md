@@ -25,7 +25,7 @@ Book and email the school the new date before 12:00 on Mon 05.10.2026.
 [Open calendar]  [Email school]
 ```
 
-- Tapping the notification, or "Open calendar", opens the booking page with the office and the service already selected, directly at the calendar.
+- Tapping the notification, or "Open calendar", opens the booking page in English (`BOOKING_LANGUAGE`) with the office and the service already selected, directly at the calendar.
 - "Email school" opens the mail app with an e-mail to the school (study@taltech.ee) that already names the new date and time. The earliest time of the day is filled in; correct it if you take another one.
 - On iPhone, press and hold the notification, or pull it down, to see the buttons.
 - The last line of the text is the latest moment for the e-mail to the school. After that the slot is too close.
@@ -41,10 +41,12 @@ Book and email the school the new date before 12:00 on Mon 05.10.2026.
 
 ## Home screen shortcut to your appointment page
 
-The confirmation e-mail of the current appointment ends with a link that opens the page to modify or cancel it. Anyone who has this link can cancel the appointment, so it is never put into a notification, a setting or this repository. Keep it only on your phone, as a home screen icon:
+The confirmation e-mail of the current appointment ends with a link that opens the page to modify or cancel it. Anyone who has this link can cancel the appointment, so it is never put into a notification, a setting or this repository. Keep it only on your phone, as a home screen icon.
 
-- iPhone, Safari: open the link in Safari. Tap the Share button (the square with an arrow pointing up), scroll down, tap "Add to Home Screen", give it a name such as "PPA appointment" and tap "Add".
-- Android, Chrome: open the link in Chrome. Tap the menu with the three dots, then "Add to Home screen" and "Add".
+The page opens in Estonian unless the address ends with `?lang=en_en`. Add these characters to the end of the link before saving it, so that it looks like `https://broneering.politsei.ee/qmaticwebbooking/#/<long id>?lang=en_en`:
+
+- iPhone, Safari: open the link in Safari. Tap the address bar, move to the end of the address, type `?lang=en_en` and tap "Go"; the page reloads in English. Then tap the Share button (the square with an arrow pointing up), scroll down, tap "Add to Home Screen", give it a name such as "PPA appointment" and tap "Add".
+- Android, Chrome: open the link in Chrome, add `?lang=en_en` to the end of the address in the same way and open it. Then tap the menu with the three dots, "Add to Home screen" and "Add".
 
 To try it without changing anything: open the shortcut, tap "I want to reschedule my appointment", look at the calendar and leave without selecting a time. Do not press cancel.
 
@@ -87,6 +89,7 @@ All settings are in `settings.py`, which is not committed because it holds the n
 | `SCHOOL_WORKDAYS` | `0` | Working days the school needs after the e-mail; raise to 1 if it is ever late |
 | `BOOKING_MINUTES` | `30` | Time you need from a notification to the e-mail |
 | `SCHOOL_EMAIL` | `"study@taltech.ee"` | Address of the "Email school" button |
+| `BOOKING_LANGUAGE` | `"en_en"` | Language of the booking page opened from a notification; `"et_ee"` for Estonian |
 
 The full list is in [docs/01-setup.md](docs/01-setup.md).
 
