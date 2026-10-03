@@ -20,20 +20,21 @@ By default it watches the residence permit service ("Applying for or extending a
 Earlier slot, Tallinn Tammsaare, 06.10
 Tallinn Tammsaare
 Tue 06.10.2026  09:15, 10:15
-Current appointment 27.10.2026. Tap to move it to the new time.
+Current appointment 27.10.2026. Tap to open it, then "I want to reschedule my appointment".
 Book and email the school the new date before 12:00 on Mon 05.10.2026.
 [Reschedule]  [Email school]
 ```
 
-1. Tap the notification. Your own appointment opens, in English, on the page that moves it to another time. The first free day, normally the one from the notification, is already selected.
-2. Tap the time from the notification, then "Reschedule appointment". There is no form: your name and contact details are already part of the appointment. Selecting a time holds it for 10 minutes.
-3. Go back to the notification and tap "Email school" (on iPhone, press and hold the notification to see the buttons). The mail app opens with an e-mail to study@taltech.ee that names the new date and time. Check the time and send it before the moment in the last line of the notification.
-4. Set `CURRENT_APPOINTMENT` in `settings.py` to the new date and restart the bot (`systemctl --user restart ppa-slot-watch`), or stop it. If the confirmation e-mail of the moved appointment has a different link, put it into `APPOINTMENT_LINK`.
-5. Have the documents ready for the earlier day: passport, application form, family information form, proof of payment of the state fee, a 40x50 mm colour photo, proof of income (bank statements; ask the migration advisor about translation) and the student status certificate from your study consultant. The school sends its invitation document to the office itself.
+1. Tap the notification. Your own appointment page opens, in English: the same page as the link in the confirmation e-mail.
+2. Tap "I want to reschedule my appointment". The calendar opens with the first free day selected, normally the day from the notification.
+3. Tap the time from the notification, then "Reschedule appointment". There is no form: your name and contact details are already part of the appointment. Selecting a time holds it for 10 minutes.
+4. Go back to the notification and tap "Email school" (on iPhone, press and hold the notification to see the buttons). The mail app opens with an e-mail to study@taltech.ee that names the new date and time. Check the time and send it before the moment in the last line of the notification.
+5. Set `CURRENT_APPOINTMENT` in `settings.py` to the new date and restart the bot (`systemctl --user restart ppa-slot-watch`), or stop it. If the confirmation e-mail of the moved appointment has a different link, put it into `APPOINTMENT_LINK`.
+6. Have the documents ready for the earlier day: passport, application form, family information form, proof of payment of the state fee, a 40x50 mm colour photo, proof of income (bank statements; ask the migration advisor about translation) and the student status certificate from your study consultant. The school sends its invitation document to the office itself.
 
 This needs the appointment link in `settings.py` (next section).
 
-To try it before a real slot appears, run `python3 slot_watch.py --test-notification`. Tapping the test message opens your real appointment page: look at it, but do not select a time. Its "Email school" draft has a subject starting with `[TEST]`: close it without sending and delete the draft.
+To try it before a real slot appears, run `python3 slot_watch.py --test-notification`. Tapping the test message opens your real appointment page: look at it, you may also open "I want to reschedule my appointment", but do not select a time and do not cancel. Its "Email school" draft has a subject starting with `[TEST]`: close it without sending and delete the draft.
 
 ## The appointment link
 
@@ -82,7 +83,7 @@ All settings are in `settings.py`, which is not committed because it holds the n
 |---|---|---|
 | `CURRENT_APPOINTMENT` | `"2026-10-27"` | Only days before this date are reported |
 | `NTFY_TOPIC` | placeholder | Your ntfy topic |
-| `APPOINTMENT_LINK` | `None` | The "modify or cancel" link of the confirmation e-mail; with it, a notification opens the page that moves the appointment |
+| `APPOINTMENT_LINK` | `None` | The "modify or cancel" link of the confirmation e-mail; with it, a notification opens your appointment page |
 | `SCHOOL_EMAIL_DEADLINE` | `"12:00"` | The school must get the e-mail before this time on a working day |
 | `SCHOOL_WORKDAYS` | `0` | Working days the school needs after the e-mail; raise to 1 if it is ever late |
 | `BOOKING_MINUTES` | `30` | Time you need from a notification to the e-mail |
@@ -95,7 +96,7 @@ The full list is in [docs/01-setup.md](docs/01-setup.md).
 
 - The bot never books or moves anything, and it cannot do anything about slots that others take faster.
 - Only weekends are treated as days off. No Estonian public holiday falls before 27.10.2026; for later dates, raise `SCHOOL_WORKDAYS` around holidays.
-- The reschedule page was opened with the real appointment link on 3 October 2026, without selecting anything. Moving the appointment itself has not been tried yet.
+- On 3 October 2026 the appointment page and the reschedule page opened on a computer with the real link, without selecting anything. On the phone, opening the reschedule address directly failed once ("Something went wrong with your appointment"), so the notification opens the appointment page instead. Moving the appointment itself has not been tried yet.
 - The machine has to stay on, online and plugged in; with the lid closed, the XFCE power settings must not suspend it ([docs/03-running.md](docs/03-running.md)).
 
 ## Documentation

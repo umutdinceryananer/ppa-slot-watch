@@ -61,7 +61,7 @@ Edit `settings.py`. It is a Python file: texts need quotes, and `None`, `True` a
 | `SCHOOL_EMAIL_DEADLINE` | `"12:00"` | The school sends its documents the same day if it gets your email with the new date before this time on a working day; only days after that sending day are reported; `None` turns this off |
 | `SCHOOL_WORKDAYS` | `0` | Working days the school needs after the email day; `0` means the same day |
 | `BOOKING_MINUTES` | `30` | Minutes you need after a notification to book and email the school |
-| `APPOINTMENT_LINK` | `None` | The "modify or cancel" link of the confirmation e-mail. With it, tapping a slot notification opens the page that moves the appointment. Anyone with the link can cancel the appointment: keep it only in `settings.py` and keep the ntfy topic secret |
+| `APPOINTMENT_LINK` | `None` | The "modify or cancel" link of the confirmation e-mail. With it, tapping a slot notification opens your appointment page, where "I want to reschedule my appointment" moves it. Anyone with the link can cancel the appointment: keep it only in `settings.py` and keep the ntfy topic secret |
 | `BOOKING_LANGUAGE` | `"en_en"` | Language of the booking page opened from a notification: `"en_en"` English, `"et_ee"` Estonian, `None` the site's default (Estonian) |
 | `SCHOOL_EMAIL` | `"study@taltech.ee"` | Address of the "Email school" button; `None` removes the button |
 | `SCHOOL_EMAIL_SUBJECT` | see `settings.example.py` | Subject of that e-mail; `{date}`, `{time}`, `{office}` and `{current}` are filled in |

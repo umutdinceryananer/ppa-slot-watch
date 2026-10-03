@@ -36,8 +36,8 @@ BOOKING_LANGUAGE = "en_en"
 
 # The "modify or cancel" link at the end of the PPA confirmation e-mail, like
 # "https://broneering.politsei.ee/qmaticwebbooking/#/<long id>". With it,
-# tapping a slot notification opens the page that moves your appointment to
-# another time: select the time and confirm, no form. Anyone who has this link
+# tapping a slot notification opens your appointment page; there, "I want to
+# reschedule my appointment", the time and the confirm button move it, no form. Anyone who has this link
 # can cancel the appointment: keep it only in settings.py, never in git. It
 # travels inside the notification through ntfy, so keep the topic secret.
 # None: tapping opens the booking calendar for a new appointment instead.

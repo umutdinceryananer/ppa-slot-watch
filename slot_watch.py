@@ -362,10 +362,16 @@ APPOINTMENT_LINK_RE = re.compile(
 )
 
 
-def reschedule_url(settings):
-    """The page that moves the user's appointment to a new date and time, in BOOKING_LANGUAGE."""
+def appointment_url(settings):
+    """The user's appointment page, in BOOKING_LANGUAGE.
+
+    It is the page of the confirmation e-mail's link, with the button "I want to
+    reschedule my appointment". The reschedule address itself is not opened
+    directly: on 3 October 2026 it failed once on a phone ("Something went wrong
+    with your appointment") while it worked on a computer.
+    """
     language = settings.booking_language
-    return f"{settings.appointment_link}/reschedule" + (f"?lang={language}" if language else "")
+    return settings.appointment_link + (f"?lang={language}" if language else "")
 
 
 def booking_url(office, route, language=None):
@@ -410,7 +416,7 @@ def slot_actions(settings, office, day, times, subject_prefix=""):
     opens the e-mail to the school about the slot.
     """
     if settings.appointment_link:
-        click, label = reschedule_url(settings), "Reschedule"
+        click, label = appointment_url(settings), "Reschedule"
     else:
         click, label = calendar_url(office, settings.booking_language), "Open calendar"
     actions = [{"action": "view", "label": label, "url": click}]
@@ -612,7 +618,7 @@ def new_slots_message(new_by_office, current_appointment, reminder=None, move=Fa
     else:
         title = f"Earlier slots at {len(names)} offices, {short}"
     blocks = ["\n".join([name] + format_slots(slots)) for name, slots in new_by_office.items()]
-    tap = "Tap to move it to the new time." if move else "Tap to book."
+    tap = "Tap to open it, then \"I want to reschedule my appointment\"." if move else "Tap to book."
     body = "\n\n".join(blocks) + f"\nCurrent appointment {current_appointment:%d.%m.%Y}. {tap}"
     if reminder:
         body += "\n" + reminder
@@ -1057,8 +1063,9 @@ def send_test_notification(settings, notifier, now):
     lines = ["Test message. If you read this, notifications work. Non-ASCII text: Jõhvi, Pärnu.",
              f"The buttons use a sample slot, {format_day(sample)} 09:15."]
     if settings.appointment_link:
-        lines.append("Tapping this message or \"Reschedule\" opens your real appointment: "
-                     "look at it, but do not select a time.")
+        lines.append("Tapping this message or \"Reschedule\" opens your real appointment: look at it, "
+                     "you may also open \"I want to reschedule my appointment\", but do not select a time "
+                     "and do not cancel.")
     if settings.school_email:
         lines.append("\"Email school\" only opens a draft marked [TEST]: do not send it, delete the draft.")
     return notifier.send("ppa-slot-watch test", "\n".join(lines), 3, click=click, actions=actions)

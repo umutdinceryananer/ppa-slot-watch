@@ -550,9 +550,10 @@ class TestAppointmentLink(unittest.TestCase):
         self.assertIn("APPOINTMENT_LINK", str(caught.exception))
         self.assertNotIn("secret-value", str(caught.exception))
 
-    def test_reschedule_url(self):
-        self.assertEqual(sw.reschedule_url(make_settings(APPOINTMENT_LINK=self.LINK)),
-                         self.LINK + "/reschedule?lang=en_en")
+    def test_appointment_url(self):
+        self.assertEqual(sw.appointment_url(make_settings(APPOINTMENT_LINK=self.LINK)), self.LINK + "?lang=en_en")
+        self.assertEqual(sw.appointment_url(make_settings(APPOINTMENT_LINK=self.LINK + "/reschedule",
+                                                          BOOKING_LANGUAGE=None)), self.LINK)
 
     def test_slot_notification_opens_the_reschedule_page(self):
         fetch = FakeFetch()
@@ -563,14 +564,15 @@ class TestAppointmentLink(unittest.TestCase):
         watcher.run_cycle()
         (title, body, _), links = notifier.sent[1], notifier.links[1]
         self.assertEqual(title, "Earlier slot, Tallinn Tammsaare, 14.10")
-        self.assertEqual(links["click"], self.LINK + "/reschedule?lang=en_en")
+        self.assertEqual(links["click"], self.LINK + "?lang=en_en")
         self.assertEqual([a["label"] for a in links["actions"]], ["Reschedule", "Email school"])
-        self.assertIn("Current appointment 27.10.2026. Tap to move it to the new time.", body)
+        self.assertIn("Current appointment 27.10.2026. "
+                      "Tap to open it, then \"I want to reschedule my appointment\".", body)
 
     def test_test_notification(self):
         notifier = FakeNotifier()
         sw.send_test_notification(make_settings(APPOINTMENT_LINK=self.LINK), notifier, NOW)
-        self.assertEqual(notifier.links[0]["click"], self.LINK + "/reschedule?lang=en_en")
+        self.assertEqual(notifier.links[0]["click"], self.LINK + "?lang=en_en")
         self.assertEqual([a["label"] for a in notifier.links[0]["actions"]], ["Reschedule", "Email school"])
         self.assertIn("do not select a time", notifier.sent[0][1])
 
