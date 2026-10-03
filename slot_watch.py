@@ -992,6 +992,31 @@ def check_once(watcher):
     return 0 if all_ok else 1
 
 
+def send_test_notification(settings, notifier, now):
+    """--test-notification: a test message with the buttons of a slot message (4.6).
+
+    The buttons use a sample slot on the first day that could be reported, at
+    09:15, so that the calendar link and the e-mail draft can be tried before a
+    real slot appears. The subject of the draft starts with "[TEST]", and the
+    message asks not to send it.
+    """
+    office = settings.offices[0]
+    day = first_report_day(now, settings)
+    while day.weekday() >= 5:  # offices are closed at weekends
+        day += datetime.timedelta(days=1)
+    sample = day.isoformat()
+    test_settings = dataclasses.replace(settings, school_email_subject="[TEST] " + settings.school_email_subject)
+    click = calendar_url(office)
+    actions = [{"action": "view", "label": "Open calendar", "url": click}]
+    mailto = school_mailto(test_settings, office.name, sample, frozenset({"09:15"}))
+    lines = ["Test message. If you read this, notifications work. Non-ASCII text: Jõhvi, Pärnu."]
+    if mailto:
+        actions.append({"action": "view", "label": "Email school", "url": mailto})
+        lines.append(f"The buttons use a sample slot, {format_day(sample)} 09:15. "
+                     "\"Email school\" only opens a draft marked [TEST]: do not send it, delete the draft.")
+    return notifier.send("ppa-slot-watch test", "\n".join(lines), 3, click=click, actions=actions)
+
+
 def setup_logging(log_file):
     """Log to the console and, when log_file is set, to a rotating file (4.7)."""
     handlers = [logging.StreamHandler()]
@@ -1024,8 +1049,7 @@ def main(argv=None):
 
     notifier = Ntfy(settings.ntfy_server, settings.ntfy_topic, settings.user_agent)
     if args.test_notification:
-        sent = notifier.send("ppa-slot-watch test",
-                             "Test message. If you read this, notifications work. Non-ASCII text: Jõhvi, Pärnu.", 3)
+        sent = send_test_notification(settings, notifier, datetime.datetime.now())
         print("test message sent" if sent else "test message not sent, see the error above")
         return 0 if sent else 1
 

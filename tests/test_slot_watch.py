@@ -499,6 +499,24 @@ class TestLinks(unittest.TestCase):
         self.assertEqual([a["label"] for a in slot["actions"]], ["Open calendar", "Email school"])
         self.assertIn("Wed%2014.10.2026%2009%3A15", slot["actions"][1]["url"])
 
+    def test_test_notification_shows_the_buttons_with_a_marked_draft(self):
+        notifier = FakeNotifier()
+        friday_afternoon = datetime.datetime(2026, 10, 2, 14, 0)    # first reportable day: Tuesday 06.10
+        sw.send_test_notification(make_settings(SCHOOL_EMAIL_DEADLINE="12:00"), notifier, friday_afternoon)
+        (title, body, priority), links = notifier.sent[0], notifier.links[0]
+        self.assertEqual((title, priority), ("ppa-slot-watch test", 3))
+        self.assertIn("do not send it", body)
+        self.assertIn("Tue 06.10.2026 09:15", body)
+        self.assertEqual([a["label"] for a in links["actions"]], ["Open calendar", "Email school"])
+        subject = sw.urllib.parse.unquote(links["actions"][1]["url"].split("subject=")[1].split("&")[0])
+        self.assertEqual(subject, "[TEST] Earlier PPA appointment: Tue 06.10.2026 09:15")
+
+    def test_test_notification_sample_day_skips_the_weekend(self):
+        notifier = FakeNotifier()
+        thursday_afternoon = datetime.datetime(2026, 10, 1, 14, 0)  # sending day Friday, next day Saturday
+        sw.send_test_notification(make_settings(SCHOOL_EMAIL_DEADLINE="12:00"), notifier, thursday_afternoon)
+        self.assertIn("Mon 05.10.2026 09:15", notifier.sent[0][1])
+
     def test_without_school_email_only_the_calendar_button(self):
         fetch = FakeFetch()
         fetch.dates = ["2026-10-14"]

@@ -373,7 +373,8 @@ OFFICES = [
 ```
 python3 slot_watch.py                      continuous watching
 python3 slot_watch.py --check-once         one cycle, prints a summary per office, sends no notification
-python3 slot_watch.py --test-notification  sends a test message to ntfy
+python3 slot_watch.py --test-notification  sends a test message to ntfy, with both buttons for a sample slot
+                                           and an e-mail draft whose subject starts with [TEST]
 python3 slot_watch.py --settings PATH      reads another settings file (with any of the above)
 ```
 

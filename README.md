@@ -29,6 +29,7 @@ Book and email the school the new date before 12:00 on Mon 05.10.2026.
 - "Email school" opens the mail app with an e-mail to the school (study@taltech.ee) that already names the new date and time. The earliest time of the day is filled in; correct it if you take another one.
 - On iPhone, press and hold the notification, or pull it down, to see the buttons.
 - The last line of the text is the latest moment for the e-mail to the school. After that the slot is too close.
+- To try the buttons before a real slot appears, run `python3 slot_watch.py --test-notification`. It sends a test message with both buttons for a sample slot. Its "Email school" draft has a subject starting with `[TEST]`: look at it, then close it without sending and delete the draft.
 
 ## When a notification arrives
 
@@ -67,7 +68,7 @@ Then install the systemd user service ([docs/03-running.md](docs/03-running.md))
 |---|---|
 | `python3 slot_watch.py` | Watches and sends notifications, normally run by the systemd service |
 | `python3 slot_watch.py --check-once` | Checks once, prints the reported days, the earliest dates and slots that are too close; sends nothing |
-| `python3 slot_watch.py --test-notification` | Sends a test message to the ntfy topic |
+| `python3 slot_watch.py --test-notification` | Sends a test message with both buttons for a sample slot; the e-mail draft is marked `[TEST]` and is not meant to be sent |
 | `python3 tools/check_host.py` | Checks the machine; `--desktop-test` and `--ntfy-topic TOPIC` add alert tests |
 | `systemctl --user restart ppa-slot-watch` | Restarts the service, for example after changing `settings.py` |
 | `journalctl --user -u ppa-slot-watch -f` | Follows the log |
