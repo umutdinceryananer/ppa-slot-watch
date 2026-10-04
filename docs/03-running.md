@@ -50,7 +50,7 @@ After 5 starts within an hour, systemd stops restarting the service, so that a p
   ```
 
 - Signs of sleep in the log: the cycle number grows by far less than 30 per hour, and the daily status message arrives late.
-- It does not decide what closing the lid does. To keep the machine running with the lid closed, set the lid action to "Switch off display" in the XFCE Power Manager, both on battery and plugged in, and check `HandleLidSwitch` in `/etc/systemd/logind.conf`.
+- Closing the lid is handled by the XFCE Power Manager. To keep the screen from staying on with the lid closed, set the lid action to "Switch off display" in the XFCE Power Manager, both on battery and plugged in, and check `HandleLidSwitch` in `/etc/systemd/logind.conf`.
 - Keep the machine plugged in; the bot runs for days, and with sleep forbidden a low battery cannot hibernate it.
 - `tools/check_host.py` prints the current lid and idle settings (M9).
 
