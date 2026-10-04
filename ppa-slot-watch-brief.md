@@ -508,7 +508,7 @@ Needs the MateBook (`tools/check_host.py`, see 3.3)
 - M10. Verified on 3 October 2026: two desktop notifications and two sounds, from the terminal and from a user service.
 - M11. Verified on 3 October 2026: `--test-notification` from the MateBook reached the phone, with "Jõhvi, Pärnu" shown correctly. A first try with the placeholder `<konu>` as topic got HTTP 400 from ntfy; the host check now rejects invalid topic names before sending.
 - M12. Verified on 3 October 2026: linger is off, git is installed, 6.7 GiB of memory. Linger is not needed while the desktop session stays open.
-- M13. Still open: the service runs since 3 October 2026. A test with the lid closed for about 10 minutes, then the daily status messages, show whether the machine stays awake and online.
+- M13. Failed in the night of 3 to 4 October 2026: the service started at 21:47, ran 5 checks, and the next check followed at 13:04 the next day, when the daily status message was also sent late. The process was frozen, so the machine slept from about 22:00 to 13:00 despite the sleep inhibitor and the lid setting. The cause is not known yet; the user's account could not read the system journal without sudo. Fix: forbid sleep with `sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target` (docs/03-running.md) and keep the machine plugged in. To be checked again after that.
 
 Needs the user
 

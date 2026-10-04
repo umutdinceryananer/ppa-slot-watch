@@ -37,9 +37,21 @@ After 5 starts within an hour, systemd stops restarting the service, so that a p
 
 ## Sleep, lid and power
 
-- `systemd-inhibit --what=sleep` blocks suspend requests, for example from the idle timer, while the bot runs.
+- The machine must never sleep while the bot runs. The inhibitor that the service takes with `systemd-inhibit --what=sleep` was not enough: in the night of 3 to 4 October 2026 the machine slept from about 22:00 to 13:00 and no check ran for 15 hours. Forbid sleep at the system level until the job is done:
+
+  ```bash
+  sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+  ```
+
+  Afterwards, nothing can suspend the machine: not the lid, not the idle timer, not the menu. Undo it when the bot is no longer needed:
+
+  ```bash
+  sudo systemctl unmask sleep.target suspend.target hibernate.target hybrid-sleep.target
+  ```
+
+- Signs of sleep in the log: the cycle number grows by far less than 30 per hour, and the daily status message arrives late.
 - It does not decide what closing the lid does. To keep the machine running with the lid closed, set the lid action to "Switch off display" in the XFCE Power Manager, both on battery and plugged in, and check `HandleLidSwitch` in `/etc/systemd/logind.conf`.
-- Keep the machine plugged in; the bot runs for days.
+- Keep the machine plugged in; the bot runs for days, and with sleep forbidden a low battery cannot hibernate it.
 - `tools/check_host.py` prints the current lid and idle settings (M9).
 
 ## When the job is done
